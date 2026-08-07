@@ -1,0 +1,47 @@
+/livox/imu_192_168_1_108:
+  history: keep_last
+  depth: 4096
+  reliability: reliable
+  durability: volatile
+
+/livox/imu_192_168_2_133:
+  history: keep_last
+  depth: 4096
+  reliability: reliable
+  durability: volatile
+
+/livox/imu_192_168_3_184:
+  history: keep_last
+  depth: 4096
+  reliability: reliable
+  durability: volatile
+
+/livox/imu_192_168_4_143:
+  history: keep_last
+  depth: 4096
+  reliability: reliable
+  durability: volatile
+
+/livox/lidar_192_168_1_108:
+  history: keep_last
+  depth: 256
+  reliability: reliable
+  durability: volatile
+
+/livox/lidar_192_168_2_133:
+  history: keep_last
+  depth: 256
+  reliability: reliable
+  durability: volatile
+
+/livox/lidar_192_168_3_184:
+  history: keep_last
+  depth: 256
+  reliability: reliable
+  durability: volatile
+
+/livox/lidar_192_168_4_143:
+  history: keep_last
+  depth: 256
+  reliability: reliable
+  durability: volatile
