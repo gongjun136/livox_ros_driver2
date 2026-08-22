@@ -237,6 +237,7 @@ else(ROS_EDITION STREQUAL "ROS2")
   ament_auto_find_build_dependencies()
   find_package(PCL REQUIRED)
   find_package(std_msgs REQUIRED)
+  find_package(sensor_msgs REQUIRED)
   find_package(builtin_interfaces REQUIRED)
   find_package(rosidl_default_generators REQUIRED)
 
@@ -247,13 +248,15 @@ else(ROS_EDITION STREQUAL "ROS2")
     message(${APR_INCLUDE_DIRS})
     message(${APR_LIBRARIES})
   endif (APR_FOUND)
+  pkg_check_modules(ZSTD REQUIRED libzstd)
 
   # generate custom msg headers
   set(LIVOX_INTERFACES livox_interfaces2)
   rosidl_generate_interfaces(${LIVOX_INTERFACES}
     "msg/CustomPoint.msg"
     "msg/CustomMsg.msg"
-    DEPENDENCIES builtin_interfaces std_msgs
+    "msg/CompressedPointCloud2.msg"
+    DEPENDENCIES builtin_interfaces sensor_msgs std_msgs
     LIBRARY_NAME ${PROJECT_NAME}
   )
 
@@ -345,6 +348,43 @@ else(ROS_EDITION STREQUAL "ROS2")
     EXECUTABLE ${PROJECT_NAME}_node
   )
 
+  add_executable(pointcloud_zstd_compressor
+    src/compression/pointcloud_zstd_compressor.cpp
+  )
+  ament_target_dependencies(pointcloud_zstd_compressor
+    rclcpp
+    sensor_msgs
+    std_msgs
+  )
+  target_include_directories(pointcloud_zstd_compressor PRIVATE
+    ${ZSTD_INCLUDE_DIRS}
+  )
+  target_link_libraries(pointcloud_zstd_compressor
+    "${cpp_typesupport_target}"
+    ${ZSTD_LIBRARIES}
+  )
+
+  add_executable(pointcloud_zstd_decompressor
+    src/compression/pointcloud_zstd_decompressor.cpp
+  )
+  ament_target_dependencies(pointcloud_zstd_decompressor
+    rclcpp
+    sensor_msgs
+    std_msgs
+  )
+  target_include_directories(pointcloud_zstd_decompressor PRIVATE
+    ${ZSTD_INCLUDE_DIRS}
+  )
+  target_link_libraries(pointcloud_zstd_decompressor
+    "${cpp_typesupport_target}"
+    ${ZSTD_LIBRARIES}
+  )
+  install(TARGETS
+    pointcloud_zstd_compressor
+    pointcloud_zstd_decompressor
+    DESTINATION lib/${PROJECT_NAME}
+  )
+
   if(BUILD_TESTING)
     find_package(ament_lint_auto REQUIRED)
     # the following line skips the linter which checks for copyrights
@@ -360,6 +400,7 @@ else(ROS_EDITION STREQUAL "ROS2")
   install(DIRECTORY
     launch_ROS2
     config
+    docs
     DESTINATION share/${PROJECT_NAME}
   )
 
@@ -376,6 +417,11 @@ else(ROS_EDITION STREQUAL "ROS2")
 
   install(PROGRAMS
     scripts/record_lidars_cameras_mcap.sh
+    DESTINATION lib/${PROJECT_NAME}
+  )
+
+  install(PROGRAMS
+    scripts/record_compressed_sensors_mcap.sh
     DESTINATION lib/${PROJECT_NAME}
   )
 

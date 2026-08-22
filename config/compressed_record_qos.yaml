@@ -1,0 +1,59 @@
+/camera/fisheye_back/h265:
+  history: keep_last
+  depth: 256
+  reliability: reliable
+  durability: volatile
+
+/camera/pinhole_back/h265:
+  history: keep_last
+  depth: 256
+  reliability: reliable
+  durability: volatile
+
+/camera/fisheye_right/h265:
+  history: keep_last
+  depth: 256
+  reliability: reliable
+  durability: volatile
+
+/camera/fisheye_left/h265:
+  history: keep_last
+  depth: 256
+  reliability: reliable
+  durability: volatile
+
+/camera/pinhole_front/h265:
+  history: keep_last
+  depth: 256
+  reliability: reliable
+  durability: volatile
+
+/camera/fisheye_front/h265:
+  history: keep_last
+  depth: 256
+  reliability: reliable
+  durability: volatile
+
+/livox/lidar_192_168_3_184/zstd:
+  history: keep_last
+  depth: 64
+  reliability: reliable
+  durability: volatile
+
+/livox/lidar_192_168_1_108/zstd:
+  history: keep_last
+  depth: 64
+  reliability: reliable
+  durability: volatile
+
+/livox/lidar_192_168_2_133/zstd:
+  history: keep_last
+  depth: 64
+  reliability: reliable
+  durability: volatile
+
+/livox/lidar_192_168_4_143/zstd:
+  history: keep_last
+  depth: 64
+  reliability: reliable
+  durability: volatile

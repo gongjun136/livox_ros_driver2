@@ -1,5 +1,7 @@
 # Livox ROS Driver 2
 
+> 本仓库额外提供 Livox PointCloud2 Zstd 无损压缩和单 MCAP 编排脚本。雷达压缩见 [docs/POINTCLOUD_ZSTD_COMPRESSION.md](docs/POINTCLOUD_ZSTD_COMPRESSION.md)，相机压缩位于相机 `shm_msgs` 包，统一录制见 [docs/COMPRESSED_SENSOR_RECORDING.md](docs/COMPRESSED_SENSOR_RECORDING.md)。
+
 Livox ROS Driver 2 is the 2nd-generation driver package used to connect LiDAR products produced by Livox, applicable for ROS (noetic recommended) and ROS2 (foxy or humble recommended).
 
   **Note :**
