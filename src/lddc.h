@@ -27,6 +27,9 @@
 
 #include "include/livox_ros_driver2.h"
 
+#include <functional>
+#include <utility>
+
 #include "driver_node.h"
 #include "lds.h"
 
@@ -89,6 +92,9 @@ class Lddc final {
   uint8_t GetTransferFormat(void) { return transfer_format_; }
   uint8_t IsMultiTopic(void) { return use_multi_topic_; }
   void SetRosNode(livox_ros::DriverNode *node) { cur_node_ = node; }
+  void SetPointcloudPublishedCallback(std::function<void()> callback) {
+    pointcloud_published_callback_ = std::move(callback);
+  }
 
   // void SetRosPub(ros::Publisher *pub) { global_pub_ = pub; };  // NOT USED
   void SetPublishFrq(uint32_t frq) { publish_frq_ = frq; }
@@ -156,6 +162,7 @@ class Lddc final {
 #endif
 
   livox_ros::DriverNode *cur_node_;
+  std::function<void()> pointcloud_published_callback_;
 };
 
 }  // namespace livox_ros

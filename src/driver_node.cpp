@@ -32,6 +32,9 @@ DriverNode& DriverNode::GetNode() noexcept {
 }
 
 DriverNode::~DriverNode() {
+  if (heartbeat_) {
+    heartbeat_->Stop();
+  }
   lddc_ptr_->lds_->RequestExit();
   exit_signal_.set_value();
   pointclouddata_poll_thread_->join();
@@ -39,7 +42,6 @@ DriverNode::~DriverNode() {
 }
 
 } // namespace livox_ros
-
 
 
 

@@ -13,6 +13,8 @@ output_type   = 0
 frame_id      = 'livox_frame'
 lvx_file_path = '/home/livox/livox_test.lvx'
 cmdline_bd_code = 'livox0000000001'
+heartbeat_node_id = 9
+heartbeat_topic = '/diagnostics/heartbeat/livox_right'
 
 cur_path = os.path.split(os.path.realpath(__file__))[0] + '/'
 cur_config_path = cur_path + '../config'
@@ -28,7 +30,12 @@ livox_ros2_params = [
     {"frame_id": frame_id},
     {"lvx_file_path": lvx_file_path},
     {"user_config_path": user_config_path},
-    {"cmdline_input_bd_code": cmdline_bd_code}
+    {"cmdline_input_bd_code": cmdline_bd_code},
+    {"functional_safety.node_id": heartbeat_node_id},
+    {"functional_safety.heartbeat_topic": heartbeat_topic},
+    {"functional_safety.heartbeat_period_ms": 100},
+    {"functional_safety.heartbeat_qos_depth": 1},
+    {"functional_safety.heartbeat_qos_reliability": "best_effort"}
 ]
 
 

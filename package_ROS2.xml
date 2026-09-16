@@ -19,6 +19,7 @@
   <depend>rcutils</depend>
   <depend>pcl_conversions</depend>
   <depend>rcl_interfaces</depend>
+  <depend>diagnostic_monitor_interfaces</depend>
   <depend>libpcl-all-dev</depend>
 
   <exec_depend>rosbag2</exec_depend>

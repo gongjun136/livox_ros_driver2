@@ -24,6 +24,8 @@
 
 #include <iostream>
 #include <chrono>
+#include <limits>
+#include <stdexcept>
 #include <vector>
 #include <csignal>
 #include <thread>
@@ -115,6 +117,50 @@ int main(int argc, char **argv) {
 #elif defined BUILDING_ROS2
 namespace livox_ros
 {
+namespace
+{
+bool LoadHeartbeatConfig(rclcpp::Node & node, functional_safety::HeartbeatConfig & config)
+{
+  node.declare_parameter("functional_safety.node_id", 0);
+  node.declare_parameter("functional_safety.heartbeat_topic", "");
+  node.declare_parameter("functional_safety.heartbeat_period_ms", 100);
+  node.declare_parameter("functional_safety.heartbeat_qos_depth", 1);
+  node.declare_parameter("functional_safety.heartbeat_qos_reliability", "best_effort");
+
+  int node_id = 0;
+  int period_ms = 100;
+  int qos_depth = 1;
+  std::string topic;
+  std::string reliability;
+  node.get_parameter("functional_safety.node_id", node_id);
+  node.get_parameter("functional_safety.heartbeat_topic", topic);
+  node.get_parameter("functional_safety.heartbeat_period_ms", period_ms);
+  node.get_parameter("functional_safety.heartbeat_qos_depth", qos_depth);
+  node.get_parameter("functional_safety.heartbeat_qos_reliability", reliability);
+
+  if (node_id == 0 && topic.empty()) return false;
+  if (node_id <= 0 || node_id > std::numeric_limits<std::uint16_t>::max()) {
+    throw std::invalid_argument("functional_safety.node_id must be in [1, 65535]");
+  }
+  if (topic.empty() || topic.front() != '/') {
+    throw std::invalid_argument("functional_safety.heartbeat_topic must be absolute");
+  }
+  if (period_ms <= 0 || qos_depth <= 0) {
+    throw std::invalid_argument("functional safety heartbeat period and QoS depth must be positive");
+  }
+  if (reliability != "best_effort" && reliability != "reliable") {
+    throw std::invalid_argument(
+        "functional_safety.heartbeat_qos_reliability must be best_effort or reliable");
+  }
+  config.node_id = static_cast<std::uint16_t>(node_id);
+  config.topic = topic;
+  config.period = std::chrono::milliseconds(period_ms);
+  config.qos_depth = static_cast<std::size_t>(qos_depth);
+  config.reliable = reliability == "reliable";
+  return true;
+}
+}  // namespace
+
 DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
 : Node("livox_driver_node", node_options)
 {
@@ -145,6 +191,14 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   this->get_parameter("output_data_type", output_type);
   this->get_parameter("frame_id", frame_id);
 
+  functional_safety::HeartbeatConfig heartbeat_config;
+  if (LoadHeartbeatConfig(*this, heartbeat_config)) {
+    heartbeat_ = std::make_unique<functional_safety::HeartbeatPublisher>(
+        *this, heartbeat_config);
+  } else {
+    DRIVER_WARN(*this, "Functional safety heartbeat is disabled for node %s", get_name());
+  }
+
   if (publish_freq > 100.0) {
     publish_freq = 100.0;
   } else if (publish_freq < 0.5) {
@@ -158,6 +212,11 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   /** Lidar data distribute control and lidar data source set */
   lddc_ptr_ = std::make_unique<Lddc>(xfer_format, multi_topic, data_src, output_type, publish_freq, frame_id);
   lddc_ptr_->SetRosNode(this);
+  lddc_ptr_->SetPointcloudPublishedCallback([this]() {
+    if (!heartbeat_) return;
+    heartbeat_->RecordWork();
+    heartbeat_->SetState(functional_safety::NodeState::kRunning);
+  });
 
   if (data_src == kSourceRawLidar) {
     DRIVER_INFO(*this, "Data Source is raw lidar.");
@@ -174,11 +233,20 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
 
     if ((read_lidar->InitLdsLidar(user_config_path))) {
       DRIVER_INFO(*this, "Init lds lidar success!");
+      if (heartbeat_) heartbeat_->SetState(functional_safety::NodeState::kIdle);
     } else {
       DRIVER_ERROR(*this, "Init lds lidar fail!");
+      if (heartbeat_) {
+        heartbeat_->SetState(functional_safety::NodeState::kFault);
+        heartbeat_->PublishNow();
+      }
     }
   } else {
     DRIVER_ERROR(*this, "Invalid data src (%d), please check the launch file", data_src);
+    if (heartbeat_) {
+      heartbeat_->SetState(functional_safety::NodeState::kFault);
+      heartbeat_->PublishNow();
+    }
   }
 
   pointclouddata_poll_thread_ = std::make_shared<std::thread>(&DriverNode::PointCloudDataPollThread, this);

@@ -240,6 +240,15 @@ else(ROS_EDITION STREQUAL "ROS2")
   find_package(sensor_msgs REQUIRED)
   find_package(builtin_interfaces REQUIRED)
   find_package(rosidl_default_generators REQUIRED)
+  find_package(diagnostic_monitor_interfaces QUIET)
+  if(NOT diagnostic_monitor_interfaces_FOUND)
+    message(STATUS "diagnostic_monitor_interfaces not found; building embedded interfaces")
+    set(DIAGNOSTIC_MONITOR_INTERFACES_EMBEDDED TRUE)
+    add_subdirectory(diagnostic_monitor_interfaces)
+    include_directories(
+      ${CMAKE_CURRENT_BINARY_DIR}/diagnostic_monitor_interfaces/rosidl_generator_cpp
+    )
+  endif()
 
   # check apr
   find_package(PkgConfig)
@@ -293,6 +302,7 @@ else(ROS_EDITION STREQUAL "ROS2")
     src/livox_ros_driver2.cpp
     src/lddc.cpp
     src/driver_node.cpp
+    src/functional_safety_heartbeat.cpp
     src/lds.cpp
     src/lds_lidar.cpp
 
@@ -311,6 +321,14 @@ else(ROS_EDITION STREQUAL "ROS2")
   )
 
   target_include_directories(${PROJECT_NAME} PRIVATE ${livox_sdk_INCLUDE_DIRS})
+  if(DIAGNOSTIC_MONITOR_INTERFACES_EMBEDDED)
+    add_dependencies(${PROJECT_NAME} diagnostic_monitor_interfaces__rosidl_typesupport_cpp)
+    target_link_libraries(${PROJECT_NAME}
+      diagnostic_monitor_interfaces__rosidl_typesupport_cpp
+    )
+  else()
+    ament_target_dependencies(${PROJECT_NAME} diagnostic_monitor_interfaces)
+  endif()
 
   # get include directories of custom msg headers
   if(DISTRO_ROS STREQUAL "humble" OR DISTRO_ROS STREQUAL "jazzy")

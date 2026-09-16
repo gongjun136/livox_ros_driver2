@@ -342,6 +342,7 @@ void Lddc::PublishPointcloud2Data(const uint8_t index, const uint64_t timestamp,
 
   if (kOutputToRos == output_type_) {
     publisher_ptr->publish(cloud);
+    if (pointcloud_published_callback_) pointcloud_published_callback_();
   } else {
 #ifdef BUILDING_ROS1
     if (bag_ && enable_lidar_bag_) {
@@ -407,6 +408,7 @@ void Lddc::PublishCustomPointData(const CustomMsg& livox_msg, const uint8_t inde
 
   if (kOutputToRos == output_type_) {
     publisher_ptr->publish(livox_msg);
+    if (pointcloud_published_callback_) pointcloud_published_callback_();
   } else {
 #ifdef BUILDING_ROS1
     if (bag_ && enable_lidar_bag_) {

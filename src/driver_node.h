@@ -26,6 +26,9 @@
 #define LIVOX_DRIVER_NODE_H
 
 #include "include/ros_headers.h"
+#ifdef BUILDING_ROS2
+#include "functional_safety_heartbeat.h"
+#endif
 
 namespace livox_ros {
 
@@ -70,6 +73,7 @@ class DriverNode final : public rclcpp::Node {
   std::shared_ptr<std::thread> imudata_poll_thread_;
   std::shared_future<void> future_;
   std::promise<void> exit_signal_;
+  std::unique_ptr<functional_safety::HeartbeatPublisher> heartbeat_;
 };
 #endif
 
