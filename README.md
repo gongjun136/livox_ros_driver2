@@ -1,93 +1,535 @@
-# Livox_Driver
+# Livox ROS Driver 2
+
+> 本仓库额外提供 Livox PointCloud2 Zstd 无损压缩和单 MCAP 编排脚本。雷达压缩见 [docs/POINTCLOUD_ZSTD_COMPRESSION.md](docs/POINTCLOUD_ZSTD_COMPRESSION.md)，相机压缩位于相机 `shm_msgs` 包，统一录制见 [docs/COMPRESSED_SENSOR_RECORDING.md](docs/COMPRESSED_SENSOR_RECORDING.md)。
+
+Livox ROS Driver 2 is the 2nd-generation driver package used to connect LiDAR products produced by Livox, applicable for ROS (noetic recommended) and ROS2 (foxy or humble recommended).
+
+  **Note :**
+
+  As a debugging tool, Livox ROS Driver is not recommended for mass production but limited to test scenarios. You should optimize the code based on the original source to meet your various needs.
+
+## 1. Preparation
+
+### 1.1 OS requirements
+
+  * Ubuntu 18.04 for ROS Melodic;
+  * Ubuntu 20.04 for ROS Noetic and ROS2 Foxy;
+  * Ubuntu 22.04 for ROS2 Humble;
+  * Ubuntu 24.04 for ROS 2 Jazzy;
+
+  **Tips:**
+
+  Colcon is a build tool used in ROS2.
+
+  How to install colcon: [Colcon installation instructions](https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Colcon-Tutorial.html)
+
+### 1.2 Install ROS & ROS2
+
+For ROS Melodic installation, please refer to:
+[ROS Melodic installation instructions](https://wiki.ros.org/melodic/Installation)
+
+For ROS Noetic installation, please refer to:
+[ROS Noetic installation instructions](https://wiki.ros.org/noetic/Installation)
+
+For ROS2 Foxy installation, please refer to:
+[ROS Foxy installation instructions](https://docs.ros.org/en/foxy/Installation/Ubuntu-Install-Debians.html)
+
+For ROS2 Humble installation, please refer to:
+[ROS Humble installation instructions](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debians.html)
+
+For ROS2 Jazzy installation, please refer to:
+[ROS Jazzy installation instructions](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debians.html)
 
 
+Desktop-Full installation is recommend.
 
-## Getting started
+## 2. Build & Run Livox ROS Driver 2 Core
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+### 2.1 Clone Livox ROS Driver 2 source code:
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+```shell
+git clone https://github.com/gongjun136/livox_ros_driver2.git ws_livox/src/livox_ros_driver2
+vcs import ws_livox/src < ws_livox/src/livox_ros_driver2/common_msgs.repos
+```
 
-## Add your files
+  **Note :**
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+  Be sure to clone the source code in a '[work_space]/src/' folder (as shown above), otherwise compilation errors will occur due to the compilation tool restriction.
+
+### 2.2 Build & install the Livox-SDK2
+
+  **Note :**
+
+  Please follow the guidance of installation in the [Livox-SDK2/README.md](https://github.com/Livox-SDK/Livox-SDK2/blob/master/README.md)
+
+### 2.3 Build the Livox ROS Driver 2 Core
+
+This fork supports ROS 2 only. The external `common_msgs` checkout provides the
+`livox_ros_driver2` message package and `diagnostic_monitor_interfaces`.
+
+#### For ROS2 Humble:
+```shell
+source /opt/ros/humble/setup.sh
+./build.sh humble
+```
+
+#### For ROS2 Jazzy:
+
+```shell
+source /opt/ros/jazzy/setup.sh
+./build.sh jazzy
+```
+
+### 2.4 Run Livox ROS Driver 2:
+
+#### For ROS2:
+```shell
+source ../../install/setup.sh
+ros2 launch livox_ros_driver2_core [launch file]
+```
+
+in which,  
+
+* **livox_ros_driver2_core**: is the ROS 2 driver implementation package;
+* **livox_ros_driver2**: remains the message package and message namespace;
+* **[launch file]** : is the ROS2 launch file you want to use; the 'launch_ROS2' folder contains several launch samples for your reference.
+
+A rviz launch example for HAP LiDAR would be:
+
+```shell
+ros2 launch livox_ros_driver2_core rviz_HAP_launch.py
+```
+
+## 3. Launch file and livox_ros_driver2 internal parameter configuration instructions
+
+### 3.1 Launch file configuration instructions
+
+Launch files of ROS are in the "ws_livox/src/livox_ros_driver2/launch_ROS1" directory and launch files of ROS2 are in the "ws_livox/src/livox_ros_driver2/launch_ROS2" directory. Different launch files have different configuration parameter values and are used in different scenarios:
+
+| launch file name          | Description                                                  |
+| ------------------------- | ------------------------------------------------------------ |
+| rviz_HAP.launch   | Connect to HAP LiDAR device<br>Publish pointcloud2 format  data<br>Autoload rviz |
+| msg_HAP.launch     | Connect to HAP LiDAR device<br>Publish livox customized pointcloud data|
+| rviz_MID360.launch        | Connect to MID360 LiDAR device<br>Publish pointcloud2 format data <br>Autoload rviz|
+| msg_MID360.launch          | Connect to MID360 LiDAR device<br>Publish livox customized pointcloud data |
+| rviz_mixed.launch    | Connect to HAP and MID360 LiDAR device<br>Publish pointcloud2 format data <br>Autoload rviz|
+| msg_mixed.launch      | Connect to HAP and MID360 LiDAR device<br>Publish livox customized pointcloud data |
+
+### 3.2 Livox ros driver 2 internal main parameter configuration instructions
+
+All internal parameters of Livox_ros_driver2 are in the launch file. Below are detailed descriptions of the three commonly used parameters :
+
+| Parameter    | Detailed description                                         | Default |
+| ------------ | ------------------------------------------------------------ | ------- |
+| publish_freq | Set the frequency of point cloud publish <br>Floating-point data type, recommended values 5.0, 10.0, 20.0, 50.0, etc. The maximum publish frequency is 100.0 Hz.| 10.0    |
+| multi_topic  | If the LiDAR device has an independent topic to publish pointcloud data<br>0 -- All LiDAR devices use the same topic to publish pointcloud data<br>1 -- Each LiDAR device has its own topic to publish point cloud data | 0       |
+| xfer_format  | Set pointcloud format<br>0 -- Livox pointcloud2(PointXYZRTLT) pointcloud format<br>1 -- Livox customized pointcloud format<br>2 -- Standard pointcloud2 (pcl :: PointXYZI) pointcloud format in the PCL library (just for ROS) | 0       |
+
+  **Note :**
+
+Other parameters not mentioned in this table are not suggested to be changed unless fully understood.
+
+&ensp;&ensp;&ensp;&ensp;***Livox_ros_driver2 pointcloud data detailed description :***
+
+1. Livox pointcloud2 (PointXYZRTLT) point cloud format, as follows :
+
+```c
+float32 x               # X axis, unit:m
+float32 y               # Y axis, unit:m
+float32 z               # Z axis, unit:m
+float32 intensity       # the value is reflectivity, 0.0~255.0
+uint8   tag             # livox tag
+uint8   line            # laser number in lidar
+float64 timestamp       # Timestamp of point
+```
+  **Note :**
+
+  The number of points in the frame may be different, but each point provides a timestamp.
+
+2. Livox customized data package format, as follows :
+
+```c
+std_msgs/Header header     # ROS standard message header
+uint64          timebase   # The time of first point
+uint32          point_num  # Total number of pointclouds
+uint8           lidar_id   # Lidar device id number
+uint8[3]        rsvd       # Reserved use
+CustomPoint[]   points     # Pointcloud data
+```
+
+&ensp;&ensp;&ensp;&ensp;Customized Point Cloud (CustomPoint) format in the above customized data package :
+
+```c
+uint32  offset_time     # offset time relative to the base time
+float32 x               # X axis, unit:m
+float32 y               # Y axis, unit:m
+float32 z               # Z axis, unit:m
+uint8   reflectivity    # reflectivity, 0~255
+uint8   tag             # livox tag
+uint8   line            # laser number in lidar
+```
+
+3. The standard pointcloud2 (pcl :: PointXYZI) format in the PCL library (only ROS can publish):
+
+&ensp;&ensp;&ensp;&ensp;Please refer to the pcl :: PointXYZI data structure in the point_types.hpp file of the PCL library.
+
+## 4. LiDAR config
+
+LiDAR Configurations (such as ip, port, data type... etc.) can be set via a json-style config file. Config files for single HAP, Mid360 and mixed-LiDARs are in the "config" folder. The parameter naming *'user_config_path'* in launch files indicates such json file path.
+
+1. Follow is a configuration example for HAP LiDAR (located in config/HAP_config.json):
+
+```json
+{
+  "lidar_summary_info" : {
+    "lidar_type": 8  # protocol type index, please don't revise this value
+  },
+  "HAP": {
+    "device_type" : "HAP",
+    "lidar_ipaddr": "",
+    "lidar_net_info" : {
+      "cmd_data_port": 56000,  # command port
+      "push_msg_port": 0,
+      "point_data_port": 57000,
+      "imu_data_port": 58000,
+      "log_data_port": 59000
+    },
+    "host_net_info" : {
+      "cmd_data_ip" : "192.168.1.5",  # host ip (it can be revised)
+      "cmd_data_port": 56000,
+      "push_msg_ip": "",
+      "push_msg_port": 0,
+      "point_data_ip": "192.168.1.5",  # host ip
+      "point_data_port": 57000,
+      "imu_data_ip" : "192.168.1.5",  # host ip
+      "imu_data_port": 58000,
+      "log_data_ip" : "",
+      "log_data_port": 59000
+    }
+  },
+  "lidar_configs" : [
+    {
+      "ip" : "192.168.1.100",  # ip of the LiDAR you want to config
+      "pcl_data_type" : 1,
+      "pattern_mode" : 0,
+      "blind_spot_set" : 50,
+      "extrinsic_parameter" : {
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 0.0,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  ]
+}
+```
+
+The parameter attributes in the above json file are described in the following table :
+
+**LiDAR configuration parameter**
+| Parameter                  | Type    | Description                                                  | Default         |
+| :------------------------- | ------- | ------------------------------------------------------------ | --------------- |
+| ip             | String  | Ip of the LiDAR you want to config | 192.168.1.100 |
+| pcl_data_type             | Int | Choose the resolution of the point cloud data to send<br>1 -- Cartesian coordinate data (32 bits)<br>2 -- Cartesian coordinate data (16 bits) <br>3 --Spherical coordinate data| 1           |
+| pattern_mode                | Int     | Space scan pattern<br>0 -- non-repeating scanning pattern mode<br>1 -- repeating scanning pattern mode <br>2 -- repeating scanning pattern mode (low scanning rate) | 0               |
+| blind_spot_set (Only for HAP LiDAR)                 | Int     | Set blind spot<br>Range from 50 cm to 200 cm               | 50               |
+| extrinsic_parameter |      | Set extrinsic parameter<br> The data types of "roll" "picth" "yaw" are float <br>  The data types of "x" "y" "z" are int<br>               |
+
+For more infomation about the HAP config, please refer to:
+[HAP Config File Description](https://github.com/Livox-SDK/Livox-SDK2/wiki/hap-config-file-description)
+
+2. When connecting multiple LiDARs, add objects corresponding to different LiDARs to the "lidar_configs" array. Examples of mixed-LiDARs config file contents are as follows :
+
+```json
+{
+  "lidar_summary_info" : {
+    "lidar_type": 8  # protocol type index, please don't revise this value
+  },
+  "HAP": {
+    "lidar_net_info" : {  # HAP ports, please don't revise these values
+      "cmd_data_port": 56000,  # HAP command port
+      "push_msg_port": 0,
+      "point_data_port": 57000,
+      "imu_data_port": 58000,
+      "log_data_port": 59000
+    },
+    "host_net_info" : {
+      "cmd_data_ip" : "192.168.1.5",  # host ip
+      "cmd_data_port": 56000,
+      "push_msg_ip": "",
+      "push_msg_port": 0,
+      "point_data_ip": "192.168.1.5",  # host ip
+      "point_data_port": 57000,
+      "imu_data_ip" : "192.168.1.5",  # host ip
+      "imu_data_port": 58000,
+      "log_data_ip" : "",
+      "log_data_port": 59000
+    }
+  },
+  "MID360": {
+    "lidar_net_info" : {  # Mid360 ports, please don't revise these values
+      "cmd_data_port": 56100,  # Mid360 command port
+      "push_msg_port": 56200,
+      "point_data_port": 56300,
+      "imu_data_port": 56400,
+      "log_data_port": 56500
+    },
+    "host_net_info" : {
+      "cmd_data_ip" : "192.168.1.5",  # host ip
+      "cmd_data_port": 56101,
+      "push_msg_ip": "192.168.1.5",  # host ip
+      "push_msg_port": 56201,
+      "point_data_ip": "192.168.1.5",  # host ip
+      "point_data_port": 56301,
+      "imu_data_ip" : "192.168.1.5",  # host ip
+      "imu_data_port": 56401,
+      "log_data_ip" : "",
+      "log_data_port": 56501
+    }
+  },
+  "lidar_configs" : [
+    {
+      "ip" : "192.168.1.100",  # ip of the HAP you want to config
+      "pcl_data_type" : 1,
+      "pattern_mode" : 0,
+      "blind_spot_set" : 50,
+      "extrinsic_parameter" : {
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 0.0,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "ip" : "192.168.1.12",  # ip of the Mid360 you want to config
+      "pcl_data_type" : 1,
+      "pattern_mode" : 0,
+      "extrinsic_parameter" : {
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 0.0,
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  ]
+}
+```
+3. when multiple nics on the host connect to multiple LiDARs, you need to add objects corresponding to different LiDARs to the lidar_configs array. Run different luanch files separately, and the following is an example of mixing lidar configuration file contents:
+
+**MID360_config1:**
+```json
+{
+  "lidar_summary_info" : {
+    "lidar_type": 8  # protocol type index，please don't revise this value
+  },
+    "MID360": {
+        "lidar_net_info": {
+            "cmd_data_port": 56100, # command port
+            "push_msg_port": 56200, 
+            "point_data_port": 56300,
+            "imu_data_port": 56400,
+            "log_data_port": 56500
+        },
+        "host_net_info": [
+            {
+                "lidar_ip": ["192.168.1.100"], # Lidar ip
+                "host_ip": "192.168.1.5", # host ip
+                "cmd_data_port": 56101,
+                "push_msg_port": 56201,
+                "point_data_port": 56301,
+                "imu_data_port": 56401,
+                "log_data_port": 56501
+            }
+        ]
+    },
+    "lidar_configs": [
+        {
+            "ip": "192.168.1.100", # ip of the LiDAR you want to config
+            "pcl_data_type": 1,
+            "pattern_mode": 0,
+            "extrinsic_parameter": {
+                "roll": 0.0,
+                "pitch": 0.0,
+                "yaw": 0.0,
+                "x": 0,
+                "y": 0,
+                "z": 0
+            }
+        }
+    ]
+}
+```
+**MID360_config2:**
+```json
+{
+  "lidar_summary_info" : {
+    "lidar_type": 8  # protocol type index，please don't revise this value
+  },
+    "MID360": {
+        "lidar_net_info": {
+            "cmd_data_port": 56100, # command port
+            "push_msg_port": 56200, 
+            "point_data_port": 56300,
+            "imu_data_port": 56400,
+            "log_data_port": 56500
+        },
+        "host_net_info": [
+            {
+                "lidar_ip": ["192.168.2.100"], # Lidar ip
+                "host_ip": "192.168.2.5", # host ip
+                "cmd_data_port": 56101,
+                "push_msg_port": 56201,
+                "point_data_port": 56301,
+                "imu_data_port": 56401,
+                "log_data_port": 56501
+            }
+        ]
+    },
+    "lidar_configs": [
+        {
+            "ip": "192.168.2.100", # ip of the LiDAR you want to config
+            "pcl_data_type": 1,
+            "pattern_mode": 0,
+            "extrinsic_parameter": {
+                "roll": 0.0,
+                "pitch": 0.0,
+                "yaw": 0.0,
+                "x": 0,
+                "y": 0,
+                "z": 0
+            }
+        }
+    ]
+}
+```
+**Launch1:**
+```
+<launch>
+    <!--user configure parameters for ros start-->
+    <arg name="lvx_file_path" default="livox_test.lvx"/>
+    <arg name="bd_list" default="100000000000000"/>
+    <arg name="xfer_format" default="0"/>
+    <arg name="multi_topic" default="1"/>
+    <arg name="data_src" default="0"/>
+    <arg name="publish_freq" default="10.0"/>
+    <arg name="output_type" default="0"/>
+    <arg name="rviz_enable" default="true"/>
+    <arg name="rosbag_enable" default="false"/>
+    <arg name="cmdline_arg" default="$(arg bd_list)"/>
+    <arg name="msg_frame_id" default="livox_frame"/>
+    <arg name="lidar_bag" default="true"/>
+    <arg name="imu_bag" default="true"/>
+    <!--user configure parameters for ros end--> 
+
+    <param name="xfer_format" value="$(arg xfer_format)"/>
+    <param name="multi_topic" value="$(arg multi_topic)"/>
+    <param name="data_src" value="$(arg data_src)"/>
+    <param name="publish_freq" type="double" value="$(arg publish_freq)"/>
+    <param name="output_data_type" value="$(arg output_type)"/>
+    <param name="cmdline_str" type="string" value="$(arg bd_list)"/>
+    <param name="cmdline_file_path" type="string" value="$(arg lvx_file_path)"/>
+    <param name="user_config_path" type="string" value="$(find livox_ros_driver2)/config/MID360_config1.json"/> # Mid360 MID360_config1 name
+    <param name="frame_id" type="string" value="$(arg msg_frame_id)"/>
+    <param name="enable_lidar_bag" type="bool" value="$(arg lidar_bag)"/>
+    <param name="enable_imu_bag" type="bool" value="$(arg imu_bag)"/>
+
+    <node name="livox_lidar_publisher1" pkg="livox_ros_driver2"
+          type="livox_ros_driver2_node" required="true"
+          output="screen" args="$(arg cmdline_arg)"/>
+
+    <group if="$(arg rviz_enable)">
+        <node name="livox_rviz" pkg="rviz" type="rviz" respawn="true"
+                args="-d $(find livox_ros_driver2)/config/display_point_cloud_ROS1.rviz"/>
+    </group>
+
+    <group if="$(arg rosbag_enable)">
+        <node pkg="rosbag" type="record" name="record" output="screen"
+                args="-a"/>
+    </group>
+
+</launch>
+```
+**Launch2:**
+```
+<launch>
+    <!--user configure parameters for ros start-->
+    <arg name="lvx_file_path" default="livox_test.lvx"/>
+    <arg name="bd_list" default="100000000000000"/>
+    <arg name="xfer_format" default="0"/>
+    <arg name="multi_topic" default="1"/>
+    <arg name="data_src" default="0"/>
+    <arg name="publish_freq" default="10.0"/>
+    <arg name="output_type" default="0"/>
+    <arg name="rviz_enable" default="true"/>
+    <arg name="rosbag_enable" default="false"/>
+    <arg name="cmdline_arg" default="$(arg bd_list)"/>
+    <arg name="msg_frame_id" default="livox_frame"/>
+    <arg name="lidar_bag" default="true"/>
+    <arg name="imu_bag" default="true"/>
+    <!--user configure parameters for ros end--> 
+
+    <param name="xfer_format" value="$(arg xfer_format)"/>
+    <param name="multi_topic" value="$(arg multi_topic)"/>
+    <param name="data_src" value="$(arg data_src)"/>
+    <param name="publish_freq" type="double" value="$(arg publish_freq)"/>
+    <param name="output_data_type" value="$(arg output_type)"/>
+    <param name="cmdline_str" type="string" value="$(arg bd_list)"/>
+    <param name="cmdline_file_path" type="string" value="$(arg lvx_file_path)"/>
+    <param name="user_config_path" type="string" value="$(find livox_ros_driver2)/config/MID360_config2.json"/> # Mid360 MID360_config2 name
+    <param name="frame_id" type="string" value="$(arg msg_frame_id)"/>
+    <param name="enable_lidar_bag" type="bool" value="$(arg lidar_bag)"/>
+    <param name="enable_imu_bag" type="bool" value="$(arg imu_bag)"/>
+
+    <node name="livox_lidar_publisher2" pkg="livox_ros_driver2"
+          type="livox_ros_driver2_node" required="true"
+          output="screen" args="$(arg cmdline_arg)"/>
+
+    <group if="$(arg rviz_enable)">
+        <node name="livox_rviz" pkg="rviz" type="rviz" respawn="true"
+                args="-d $(find livox_ros_driver2)/config/display_point_cloud_ROS1.rviz"/>
+    </group>
+
+    <group if="$(arg rosbag_enable)">
+        <node pkg="rosbag" type="record" name="record" output="screen"
+                args="-a"/>
+    </group>
+
+</launch>
 
 ```
-cd existing_repo
-git remote add origin http://10.233.88.16:60002/drivers/lidars/livox_driver.git
-git branch -M main
-git push -uf origin main
-```
 
-## Integrate with your tools
+## 5. Supported LiDAR list
 
-* [Set up project integrations](http://10.233.88.16:60002/drivers/lidars/livox_driver/-/settings/integrations)
+* HAP
+* Mid360
+* (more types are comming soon...)
 
-## Collaborate with your team
+## 6. FAQ
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+### 6.1 launch with "livox_lidar_rviz_HAP.launch" but no point cloud display on the grid?
 
-## Test and Deploy
+Please check the "Global Options - Fixed Frame" field in the RViz "Display" pannel. Set the field value to "livox_frame" and check the "PointCloud2" option in the pannel.
 
-Use the built-in continuous integration in GitLab.
+### 6.2 launch with command "ros2 launch livox_lidar_rviz_HAP_launch.py" but cannot open shared object file "liblivox_sdk_shared.so" ?
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+Please add '/usr/local/lib' to the env LD_LIBRARY_PATH.
 
-***
+* If you want to add to current terminal:
 
-# Editing this README
+  ```shell
+  export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/lib
+  ```
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+* If you want to add to current user:
 
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+  ```shell
+  vim ~/.bashrc
+  export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/lib
+  source ~/.bashrc
+  ```
