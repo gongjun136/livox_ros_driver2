@@ -6,6 +6,10 @@ include(cmake/version.cmake)
 project(livox_ros_driver2_core VERSION ${LIVOX_ROS_DRIVER2_VERSION} LANGUAGES CXX)
 message(STATUS "${PROJECT_NAME} version: ${LIVOX_ROS_DRIVER2_VERSION}")
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
 endif()
@@ -17,7 +21,7 @@ endif()
 list(INSERT CMAKE_MODULE_PATH 0 "${PROJECT_SOURCE_DIR}/cmake/modules")
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter)
+  add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter $<$<CONFIG:Release>:-O3>)
 endif()
 
 add_definitions(-DBUILDING_ROS2)
