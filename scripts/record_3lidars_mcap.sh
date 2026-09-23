@@ -5,7 +5,7 @@ set -euo pipefail
 duration_seconds="${1:-600}"
 timestamp="$(date +%Y_%m_%d-%H_%M_%S)"
 output_root="${2:-/data/rosbag/$(date +%Y-%m-%d)/livox_${timestamp}}"
-qos_file="$(ros2 pkg prefix --share livox_ros_driver2)/config/rosbag_record_qos.yaml"
+qos_file="$(ros2 pkg prefix --share livox_ros_driver2_core)/config/rosbag_record_qos.yaml"
 
 if ! [[ "${duration_seconds}" =~ ^[1-9][0-9]*$ ]]; then
   echo "duration_seconds must be a positive integer" >&2

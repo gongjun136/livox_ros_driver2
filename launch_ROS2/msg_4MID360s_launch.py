@@ -30,7 +30,7 @@ def generate_launch_description():
     for index, config_file in enumerate(config_files, start=1):
         livox_drivers.append(
             Node(
-                package='livox_ros_driver2',
+                package='livox_ros_driver2_core',
                 executable='livox_ros_driver2_node',
                 namespace=f'mid360_{index}',
                 name=f'livox_lidar_publisher_{index}',

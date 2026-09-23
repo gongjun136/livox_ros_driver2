@@ -43,12 +43,13 @@ For ROS2 Jazzy installation, please refer to:
 
 Desktop-Full installation is recommend.
 
-## 2. Build & Run Livox ROS Driver 2
+## 2. Build & Run Livox ROS Driver 2 Core
 
 ### 2.1 Clone Livox ROS Driver 2 source code:
 
 ```shell
-git clone https://github.com/Livox-SDK/livox_ros_driver2.git ws_livox/src/livox_ros_driver2
+git clone https://github.com/gongjun136/livox_ros_driver2.git ws_livox/src/livox_ros_driver2
+vcs import ws_livox/src < ws_livox/src/livox_ros_driver2/common_msgs.repos
 ```
 
   **Note :**
@@ -61,19 +62,10 @@ git clone https://github.com/Livox-SDK/livox_ros_driver2.git ws_livox/src/livox_
 
   Please follow the guidance of installation in the [Livox-SDK2/README.md](https://github.com/Livox-SDK/Livox-SDK2/blob/master/README.md)
 
-### 2.3 Build the Livox ROS Driver 2:
+### 2.3 Build the Livox ROS Driver 2 Core
 
-#### For ROS (take Noetic as an example):
-```shell
-source /opt/ros/noetic/setup.sh
-./build.sh ROS1
-```
-
-#### For ROS2 Foxy:
-```shell
-source /opt/ros/foxy/setup.sh
-./build.sh ROS2
-```
+This fork supports ROS 2 only. The external `common_msgs` checkout provides the
+`livox_ros_driver2` message package and `diagnostic_monitor_interfaces`.
 
 #### For ROS2 Humble:
 ```shell
@@ -90,38 +82,22 @@ source /opt/ros/jazzy/setup.sh
 
 ### 2.4 Run Livox ROS Driver 2:
 
-#### For ROS:
-
-```shell
-source ../../devel/setup.sh
-roslaunch livox_ros_driver2 [launch file]
-```
-
-in which,  
-
-* **livox_ros_driver2** : is the ROS package name of Livox ROS Driver 2;
-* **[launch file]** : is the ROS launch file you want to use; the 'launch_ROS1' folder contains several launch samples for your reference;  
-
-An rviz launch example for HAP LiDAR would be:
-
-```shell
-roslaunch livox_ros_driver2 rviz_HAP.launch
-```
-
 #### For ROS2:
 ```shell
 source ../../install/setup.sh
-ros2 launch livox_ros_driver2 [launch file]
+ros2 launch livox_ros_driver2_core [launch file]
 ```
 
 in which,  
 
+* **livox_ros_driver2_core**: is the ROS 2 driver implementation package;
+* **livox_ros_driver2**: remains the message package and message namespace;
 * **[launch file]** : is the ROS2 launch file you want to use; the 'launch_ROS2' folder contains several launch samples for your reference.
 
 A rviz launch example for HAP LiDAR would be:
 
 ```shell
-ros2 launch livox_ros_driver2 rviz_HAP_launch.py
+ros2 launch livox_ros_driver2_core rviz_HAP_launch.py
 ```
 
 ## 3. Launch file and livox_ros_driver2 internal parameter configuration instructions

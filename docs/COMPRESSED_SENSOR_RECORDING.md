@@ -4,7 +4,7 @@
 
 ```text
 camera_sdk/shm_msgs       -> 六路 Image6m H.265
-livox_ros_driver2         -> 四路 PointCloud2 Zstd
+livox_ros_driver2_core    -> 四路 PointCloud2 Zstd
 record_compressed_sensors -> 一个 ros2 bag record / 一个 MCAP
 ```
 
@@ -24,7 +24,7 @@ export CAMERA_BITRATE_MBPS=15
 export CAMERA_GOP=30
 export ZSTD_LEVEL=1
 
-ros2 run livox_ros_driver2 record_compressed_sensors_mcap.sh \
+ros2 run livox_ros_driver2_core record_compressed_sensors_mcap.sh \
   600 /data/rosbag/compressed_sensors_test
 ```
 
@@ -32,7 +32,7 @@ ros2 run livox_ros_driver2 record_compressed_sensors_mcap.sh \
 
 ```text
 ros2 run shm_msgs shm_image6m_h265_encoder_6ch
-ros2 run livox_ros_driver2 pointcloud_zstd_compressor
+ros2 run livox_ros_driver2_core pointcloud_zstd_compressor
 ros2 bag record ... 10 compressed topics
 ```
 

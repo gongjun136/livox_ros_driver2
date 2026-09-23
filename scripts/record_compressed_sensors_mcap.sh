@@ -14,7 +14,7 @@ if ! [[ "${duration_seconds}" =~ ^[1-9][0-9]*$ ]]; then
   echo "duration_seconds must be a positive integer" >&2
   exit 2
 fi
-share_dir="$(ros2 pkg prefix --share livox_ros_driver2)"
+share_dir="$(ros2 pkg prefix --share livox_ros_driver2_core)"
 if ! ros2 pkg prefix shm_msgs >/dev/null 2>&1; then
   echo "Camera package shm_msgs is not available in the sourced ROS environment." >&2
   exit 1
@@ -83,8 +83,8 @@ trap request_stop INT TERM
 trap cleanup EXIT
 
 echo "Expecting camera topics from: ./rb_camera.sh ros2_h265"
-echo "Starting LiDAR Zstd compressor from livox_ros_driver2..."
-ros2 run livox_ros_driver2 pointcloud_zstd_compressor --ros-args \
+echo "Starting LiDAR Zstd compressor from livox_ros_driver2_core..."
+ros2 run livox_ros_driver2_core pointcloud_zstd_compressor --ros-args \
   -p compression_level:="${zstd_level}" &
 lidar_compressor_pid=$!
 

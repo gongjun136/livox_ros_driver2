@@ -12,7 +12,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
 
     package_share_dir = get_package_share_directory(
-        'livox_ros_driver2'
+        'livox_ros_driver2_core'
     )
 
     default_config_path = os.path.join(
@@ -75,7 +75,7 @@ def generate_launch_description():
     ]
 
     livox_driver = Node(
-        package='livox_ros_driver2',
+        package='livox_ros_driver2_core',
         executable='livox_ros_driver2_node',
         name=node_name,
         output='screen',

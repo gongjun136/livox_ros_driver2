@@ -1,6 +1,6 @@
 # Livox PointCloud2 Zstd 无损压缩
 
-`pointcloud_zstd_compressor` 和 `pointcloud_zstd_decompressor` 属于 `livox_ros_driver2`，只依赖 ROS 2、PointCloud2 和系统 Zstd，不依赖相机 SDK 或 `shm_msgs`。
+`pointcloud_zstd_compressor` 和 `pointcloud_zstd_decompressor` 属于 `livox_ros_driver2_core`，只依赖 ROS 2、外部 `livox_ros_driver2` 消息包、PointCloud2 和系统 Zstd，不依赖相机 SDK 或 `shm_msgs`。
 
 ## 依赖和编译
 
@@ -9,15 +9,16 @@ sudo apt install libzstd-dev
 source /opt/ros/humble/setup.bash
 
 cd /absolute/path/to/livox_sdk
-colcon build --packages-select livox_ros_driver2 \
-  --cmake-args -DROS_EDITION=ROS2 -DDISTRO_ROS=humble
+MAKEFLAGS=-j4 colcon build --executor sequential \
+  --packages-up-to livox_ros_driver2_core \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release -DDISTRO_ROS=humble
 source install/setup.bash
 ```
 
 ## 压缩
 
 ```bash
-ros2 run livox_ros_driver2 pointcloud_zstd_compressor --ros-args \
+ros2 run livox_ros_driver2_core pointcloud_zstd_compressor --ros-args \
   -p compression_level:=1
 ```
 
@@ -35,7 +36,7 @@ ros2 run livox_ros_driver2 pointcloud_zstd_compressor --ros-args \
 ## 解压回放
 
 ```bash
-ros2 run livox_ros_driver2 pointcloud_zstd_decompressor
+ros2 run livox_ros_driver2_core pointcloud_zstd_decompressor
 ```
 
 默认发布到带 `/decompressed` 后缀的 topic，避免压缩和解压同时运行时形成消息循环。可用 `input_topics`、`output_topics` 参数修改映射。

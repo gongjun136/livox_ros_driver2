@@ -6,7 +6,7 @@ from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
-    pkg_dir = get_package_share_directory('livox_ros_driver2')
+    pkg_dir = get_package_share_directory('livox_ros_driver2_core')
     launch_dir = os.path.join(pkg_dir, 'launch_ROS2')
 
     front = IncludeLaunchDescription(
