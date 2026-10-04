@@ -239,6 +239,8 @@ pipeline {
                 SETTING_SH=$WS/setting.sh
 
                 cd $WS
+                echo "########## 验证 install 目录 ##########"
+                ls -la /opt/ros/message-common/install/
                 chown $(id -u):$(id -g) $WS
 
                 if [ "${CLEAN_BUILD}" = "true" ]; then
@@ -250,6 +252,7 @@ pipeline {
 
                 echo "########## [3.2] load env ##########"
                 bash "$SETTING_SH" load env
+
 
                 echo "########## [3.3] 处理重复包 domain_vcu_can_bridge ##########"
                 if [ -d "src/drivers/canbus/src/domain_vcu_can_bridge" ]; then
