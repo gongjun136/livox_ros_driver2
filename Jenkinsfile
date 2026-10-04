@@ -233,14 +233,15 @@ pipeline {
                 "-e DEBIAN_FRONTEND=noninteractive"
             ) {
                 sh '''
-                #!/bin/bash
+                bash -c '
+                
                 set -e
                 WS=/home/sany/work/wheel_loader
                 SETTING_SH=$WS/setting.sh
 
                 cd $WS
                 echo "########## 验证 install 目录 ##########"
-                . /opt/ros/message-common/install/setup.bash
+                source /opt/ros/message-common/install/setup.bash
                 chown $(id -u):$(id -g) $WS
 
                 if [ "${CLEAN_BUILD}" = "true" ]; then
@@ -274,6 +275,7 @@ pipeline {
                 echo "########## [3.6] 验证 install 目录 ##########"
                 ls -la install/
                 echo "包数量: $(ls install/ | wc -l)"
+                '
                 '''
 
                 sh '''
