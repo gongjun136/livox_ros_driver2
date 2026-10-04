@@ -240,7 +240,7 @@ pipeline {
 
                 cd $WS
                 echo "########## 验证 install 目录 ##########"
-                ls -la /opt/ros/message-common/install/
+                . /opt/ros/message-common/install/setup.bash
                 chown $(id -u):$(id -g) $WS
 
                 if [ "${CLEAN_BUILD}" = "true" ]; then
