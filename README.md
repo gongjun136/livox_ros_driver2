@@ -1,5 +1,7 @@
 # Livox ROS Driver 2
 
+> 中文部署与开发手册入口：[docs/index.md](docs/index.md)。包含统一工作区、主 Orin 三雷达启动、网络与消息接口、数据链路、心跳、压缩采集和授时排障。文档网站生成方式见 [docs/maintenance/documentation_rules.md](docs/maintenance/documentation_rules.md)，与定位程序一致使用 `cmake -S docs -B build_docs`、`cmake --build build_docs --target docs`。
+
 > 本仓库额外提供 Livox PointCloud2 Zstd 无损压缩和单 MCAP 编排脚本。雷达压缩见 [docs/POINTCLOUD_ZSTD_COMPRESSION.md](docs/POINTCLOUD_ZSTD_COMPRESSION.md)，相机压缩位于相机 `shm_msgs` 包，统一录制见 [docs/COMPRESSED_SENSOR_RECORDING.md](docs/COMPRESSED_SENSOR_RECORDING.md)。
 
 Livox ROS Driver 2 is the 2nd-generation driver package used to connect LiDAR products produced by Livox, applicable for ROS (noetic recommended) and ROS2 (foxy or humble recommended).

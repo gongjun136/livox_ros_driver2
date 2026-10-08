@@ -1,4 +1,4 @@
-# 六路相机和四路 Livox 单 MCAP 录制
+@page livox_compressed_recording 六路相机和四路 Livox 单 MCAP 录制
 
 压缩实现保持在各自驱动内：
 

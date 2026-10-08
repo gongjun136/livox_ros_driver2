@@ -1,4 +1,4 @@
-# Livox PointCloud2 Zstd 无损压缩
+@page livox_pointcloud_zstd Livox PointCloud2 Zstd 无损压缩
 
 `pointcloud_zstd_compressor` 和 `pointcloud_zstd_decompressor` 属于 `livox_ros_driver2_core`，只依赖 ROS 2、外部 `livox_ros_driver2` 消息包、PointCloud2 和系统 Zstd，不依赖相机 SDK 或 `shm_msgs`。
 

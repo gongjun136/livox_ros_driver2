@@ -1,0 +1,48 @@
+/**
+ * @example{lineno} master_lidar.launch.py
+ * 用途与阅读入口见 @ref livox_source_examples 。
+ */
+/**
+ * @example{lineno} lidar_front.launch.py
+ * 用途与阅读入口见 @ref livox_source_examples 。
+ */
+/**
+ * @example{lineno} lidar_left.launch.py
+ * 用途与阅读入口见 @ref livox_source_examples 。
+ */
+/**
+ * @example{lineno} lidar_right.launch.py
+ * 用途与阅读入口见 @ref livox_source_examples 。
+ */
+/**
+ * @example{lineno} slave_lidar.launch.py
+ * 用途与阅读入口见 @ref livox_source_examples 。
+ */
+/**
+ * @example{lineno} MID360s_config_front.json
+ * 用途与阅读入口见 @ref livox_source_examples 。
+ */
+/**
+ * @example{lineno} MID360s_config_left.json
+ * 用途与阅读入口见 @ref livox_source_examples 。
+ */
+/**
+ * @example{lineno} MID360s_config_right.json
+ * 用途与阅读入口见 @ref livox_source_examples 。
+ */
+/**
+ * @example{lineno} MID360s_config_rear.json
+ * 用途与阅读入口见 @ref livox_source_examples 。
+ */
+/**
+ * @example{lineno} record_3lidars_mcap.sh
+ * 用途与阅读入口见 @ref livox_source_examples 。
+ */
+/**
+ * @example{lineno} record_lidars_cameras_mcap.sh
+ * 用途与阅读入口见 @ref livox_source_examples 。
+ */
+/**
+ * @example{lineno} record_compressed_sensors_mcap.sh
+ * 用途与阅读入口见 @ref livox_source_examples 。
+ */

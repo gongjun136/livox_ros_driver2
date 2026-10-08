@@ -154,6 +154,25 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+option(BUILD_DOCS "Build the Doxygen deployment and developer manual" OFF)
+if(BUILD_DOCS)
+  find_package(Doxygen REQUIRED COMPONENTS dot)
+  set(LIVOX_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+  set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/docs")
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/docs/Doxyfile.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile"
+    @ONLY)
+  add_custom_target(docs ALL
+    COMMAND "${DOXYGEN_EXECUTABLE}" "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile"
+    COMMAND "${CMAKE_COMMAND}"
+            "-DWARN_LOG=${CMAKE_CURRENT_BINARY_DIR}/doxygen-warnings.log"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/docs/check_warnings.cmake"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Generating Livox driver deployment and developer manual"
+    VERBATIM)
+endif()
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
