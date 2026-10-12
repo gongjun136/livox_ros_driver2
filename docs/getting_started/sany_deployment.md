@@ -1,8 +1,16 @@
-@page livox_sany_deployment 主 Orin 三雷达部署
+@page livox_sany_deployment 主 Orin 雷达部署
 
 # 网络与拓扑
 
-当前定位只使用主 Orin 本地接入的前、左、右雷达。下表是仓库配置及 2026-10-08 `sany-03-master` 的现场核对结果；其他车辆先核对自己的网卡和 JSON。
+旧车 master 使用前、左、右雷达；新车四台全部接入 master。自动入口读取 `/opt/conf/vehicle_config.yaml` 的 VIN 和 LIDAR，`MASTER AND SLAVE` 启动 master 三台，`MASTER` 启动四台。下表是旧车配置及 2026-10-08 `sany-03-master` 的现场核对结果；其他车辆先核对自己的网卡和 JSON。
+
+```bash
+ros2 launch livox_ros_driver2_core sany_lidar.launch.py
+# WSL/测试文件路径覆盖：
+ros2 launch livox_ros_driver2_core sany_lidar.launch.py vehicle_config:=/absolute/vehicle_config.yaml
+```
+
+已登记 VIN：旧车 `SANLV77EXSH000858`，新车 `SW956ELCG0858`。文件缺失、未知 VIN 或非法 LIDAR 时拒绝自动启动。原 master/slave 显式 launch 不依赖此文件，保持原启动方式。
 
 | 雷达 | 网卡 | 主机 IP | 雷达 IP | 点云 Topic | IMU Topic |
 |---|---|---|---|---|---|
@@ -25,7 +33,8 @@ source /opt/ros/humble/setup.bash
 source "$LIGHTNING_LM_INSTALL_SETUP"
 set -u
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
-exec ros2 launch livox_ros_driver2_core master_lidar.launch.py
+exec ros2 launch livox_ros_driver2_core sany_lidar.launch.py \
+  vehicle_config:="${SANY_VEHICLE_CONFIG:-/opt/conf/vehicle_config.yaml}"
 ```
 
 在终端一运行并保持终端打开：
@@ -35,7 +44,33 @@ source "$HOME/.config/sany/workspace.bash"
 bash "${SANY_WS}/run_lidar.sh"
 ```
 
-`master_lidar.launch.py` 只包含前、左、右三台雷达；`slave_lidar.launch.py` 的后雷达属于独立采集拓扑，当前定位不启用。若驱动已由其他终端或服务启动，先确认进程和工作区来源，避免重复绑定设备端口。
+自动入口按车辆文件选择三台或四台。旧车显式入口 `master_lidar.launch.py` 只包含前、左、右三台；`slave_lidar.launch.py` 继续在 slave 独立启动后雷达，旧车定位不使用该后雷达。若驱动已由其他终端或服务启动，先确认进程和工作区来源，避免重复绑定设备端口。
+
+# 新车：主 Orin 同时启动四台雷达
+
+四台雷达都接入 master 的新车使用 `master_4lidar.launch.py`，启动前、左、右、后四个独立驱动进程。前、左、右沿用上表配置；后雷达使用 `MID360s_config_rear_master.json`，master 接收网口配置为 `192.168.4.100`，后雷达 IP 为 `192.168.4.143`。后雷达的具体网卡名以新车实机为准，主机侧 UDP 端口仍为 56104–56504。
+
+重新构建驱动后，在加载同一工作区环境的终端运行：
+
+```bash
+source "$HOME/.config/sany/workspace.bash"
+source /opt/ros/humble/setup.bash
+source "$LIGHTNING_LM_INSTALL_SETUP"
+export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
+ros2 launch livox_ros_driver2_core master_4lidar.launch.py
+```
+
+也可将新车 `run_lidar.sh` 的最后一行改为 `exec ros2 launch livox_ros_driver2_core master_4lidar.launch.py`。四雷达入口已经包含原 master 的三路驱动，不要与 `master_lidar.launch.py` 或 `slave_lidar.launch.py` 同时运行。
+
+四路点云保持 `sensor_msgs/msg/PointCloud2`、10 Hz 和原有 IP 后缀话题；四路 IMU 和心跳话题也保持原名。后雷达输出为 `/livox/lidar_192_168_4_143`、`/livox/imu_192_168_4_143` 和 `/diagnostics/heartbeat/livox_rear`，心跳 node_id 为 12。检查前三路时沿用下节命令，并补查后雷达：
+
+```bash
+ros2 topic hz /livox/lidar_192_168_4_143
+ros2 topic hz /livox/imu_192_168_4_143
+ros2 topic echo /diagnostics/heartbeat/livox_rear --once --qos-reliability best_effort
+```
+
+本入口只启动雷达驱动。在线定位的雷达布局仍由定位配置决定，启动四路驱动不会自动让定位使用后雷达。原 `slave_lidar.launch.py` 默认继续使用 `MID360s_config_rear.json` 中的 `192.168.4.101`。
 
 # 输入验收与第二步定位
 

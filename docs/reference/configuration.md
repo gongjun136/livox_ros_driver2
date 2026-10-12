@@ -2,7 +2,9 @@
 
 # 主机与设备配置
 
-`master_lidar.launch.py` → 三个 `lidar_*.launch.py` → 各自安装目录中的 `MID360s_config_*.json`。这些 Launch 在 Python 中赋值并传入 ROS 参数，未声明可用命令行覆盖的 Launch 参数；调整时修改对应文件并重编。
+`master_lidar.launch.py` → 三个 `lidar_*.launch.py` → 各自安装目录中的 `MID360s_config_*.json`。前三路 Launch 在 Python 中赋值并传入 ROS 参数；调整时修改对应文件并重编。
+
+`master_4lidar.launch.py` 包含 `master_lidar.launch.py` 与 `lidar_rear.launch.py`，为后雷达传入 `config_file` 指向 `MID360s_config_rear_master.json`。后雷达 Launch 的 `config_file` 默认仍为 `MID360s_config_rear.json`，因此旧 slave 入口保持原配置。
 
 | 配置文件 | host_ip | lidar_ip |
 |---|---|---|
@@ -10,6 +12,7 @@
 | `MID360s_config_left.json` | 192.168.1.100 | 192.168.1.108 |
 | `MID360s_config_right.json` | 192.168.2.100 | 192.168.2.133 |
 | `MID360s_config_rear.json`（独立后雷达） | 192.168.4.101 | 192.168.4.143 |
+| `MID360s_config_rear_master.json`（master 四雷达入口的后雷达） | 192.168.4.100 | 192.168.4.143 |
 
 前三路当前雷达侧/主机侧端口分别为：
 
@@ -25,7 +28,7 @@
 
 JSON `lidar_configs` 中 `pcl_data_type=1` 表示设备的 32 位笛卡尔原始点格式，`pattern_mode=0` 为非重复扫描。它们与 ROS 的 `xfer_format` 是不同层的选择。当前安装姿态配置均为零；定位使用的传感器外参与业务坐标变换由定位配置维护。
 
-# 当前三个单雷达 Launch 的发布参数
+# 前、左、右、后单雷达 Launch 的发布参数
 
 | 参数 | 值 | 作用 |
 |---|---|---|
