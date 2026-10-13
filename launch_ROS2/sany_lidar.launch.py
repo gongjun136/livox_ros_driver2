@@ -16,7 +16,7 @@ def launch_for_vehicle(context):
         if not isinstance(vehicle, dict):
             raise ValueError('expected a YAML mapping')
         vin = vehicle.get('VIN')
-        if vin not in ('SANLV77EXSH000858', 'SW956ELCG0858'):
+        if vin not in ('SANLV77EXSH000858', 'SANLU77E8TH000006'):
             raise ValueError(f'unknown VIN: {vin!r}')
         layouts = {'MASTER AND SLAVE': 'master_lidar.launch.py',
                    'MASTER': 'master_4lidar.launch.py'}

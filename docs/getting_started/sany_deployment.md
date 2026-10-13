@@ -10,7 +10,7 @@ ros2 launch livox_ros_driver2_core sany_lidar.launch.py
 ros2 launch livox_ros_driver2_core sany_lidar.launch.py vehicle_config:=/absolute/vehicle_config.yaml
 ```
 
-已登记 VIN：旧车 `SANLV77EXSH000858`，新车 `SW956ELCG0858`。文件缺失、未知 VIN 或非法 LIDAR 时拒绝自动启动。原 master/slave 显式 launch 不依赖此文件，保持原启动方式。
+已登记 VIN：旧车 `SANLV77EXSH000858`，新车 `SANLU77E8TH000006`。新车 VIN 于 2026-10-13 按用户确认更正，此前登记的 `SW956ELCG0858` 对应同一台车；识别以真实 VIN 为准。文件缺失、未知 VIN 或非法 LIDAR 时拒绝自动启动。原 master/slave 显式 launch 不依赖此文件，保持原启动方式。
 
 | 雷达 | 网卡 | 主机 IP | 雷达 IP | 点云 Topic | IMU Topic |
 |---|---|---|---|---|---|
