@@ -28,6 +28,7 @@
 #define LIVOX_ROS_DRIVER_LDS_LIDAR_H_
 
 #include <memory>
+#include <atomic>
 #include <mutex>
 #include <vector>
 
@@ -37,6 +38,7 @@
 #include "livox_lidar_def.h"
 
 #include "rapidjson/document.h"
+#include "lidar_dtc_monitor.h"
 
 namespace livox_ros {
 
@@ -50,6 +52,9 @@ class LdsLidar final : public Lds {
 
   bool InitLdsLidar(const std::string& path_name);
   bool Start();
+  void SetDiagnosticMonitor(std::shared_ptr<dtc::Monitor> monitor) { diagnostic_monitor_ = std::move(monitor); }
+  void ObserveDiagnosticCloud(PointFrame* frame);
+  void QueryDiagnosticStatus();
 
   int DeInitLdsLidar(void);
  private:
@@ -68,6 +73,10 @@ class LdsLidar final : public Lds {
   void ResetLdsLidar(void);
 
   void SetLidarPubHandle();
+  static void DiagnosticStatusCallback(uint32_t handle, uint8_t dev_type, const char* info, void* context);
+  static void DiagnosticPacketCallback(uint32_t handle, uint8_t dev_type, LivoxLidarEthernetPacket* data, void* context);
+  static void DiagnosticQueryCallback(livox_status status, uint32_t handle,
+      LivoxLidarDiagInternalInfoResponse* response, void* context);
 
 	// auto connect mode
 	void EnableAutoConnectMode(void) { auto_connect_mode_ = true; }
@@ -86,6 +95,10 @@ class LdsLidar final : public Lds {
   bool auto_connect_mode_;
   uint32_t whitelist_count_;
   volatile bool is_initialized_;
+  std::shared_ptr<dtc::Monitor> diagnostic_monitor_;
+  uint32_t diagnostic_handle_ = 0;
+  std::atomic_bool diagnostic_query_pending_{false};
+  uint16_t diagnostic_observer_id_ = 0;
   char broadcast_code_whitelist_[kMaxLidarCount][kBroadcastCodeSize];
 };
 

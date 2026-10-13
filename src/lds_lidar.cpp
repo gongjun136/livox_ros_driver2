@@ -137,6 +137,13 @@ bool LdsLidar::InitLivoxLidar() {
   if (!parser.Parse(user_configs)) {
     std::cout << "failed to parse user-defined config" << std::endl;
   }
+  if (diagnostic_monitor_) {
+    if (user_configs.size() != 1) {
+      std::cerr << "Role-specific DTC monitoring requires exactly one configured LiDAR" << std::endl;
+      return false;
+    }
+    diagnostic_handle_ = user_configs.front().handle;
+  }
 
   // SDK initialization
   if (!LivoxLidarSdkInit(path_.c_str())) {
@@ -180,6 +187,10 @@ bool LdsLidar::InitLivoxLidar() {
   }
 
   SetLivoxLidarInfoChangeCallback(LivoxLidarCallback::LidarInfoChangeCallback, g_lds_ldiar);
+  if (diagnostic_monitor_) {
+    SetLivoxLidarInfoCallback(DiagnosticStatusCallback, this);
+    diagnostic_observer_id_ = LivoxLidarAddPointCloudObserver(DiagnosticPacketCallback, this);
+  }
   return true;
 }
 
@@ -202,6 +213,10 @@ int LdsLidar::DeInitLdsLidar(void) {
   }
 
   if (lidar_summary_info_.lidar_type & kLivoxLidarType) {
+    if (diagnostic_monitor_) {
+      LivoxLidarRemovePointCloudObserver(diagnostic_observer_id_);
+      SetLivoxLidarInfoCallback(nullptr, nullptr);
+    }
     LivoxLidarSdkUninit();
     printf("Livox Lidar SDK Deinit completely!\n");
   }
@@ -210,5 +225,80 @@ int LdsLidar::DeInitLdsLidar(void) {
 }
 
 void LdsLidar::PrepareExit(void) { DeInitLdsLidar(); }
+
+void LdsLidar::DiagnosticStatusCallback(uint32_t handle, uint8_t, const char* info, void* context) {
+  auto* self = static_cast<LdsLidar*>(context);
+  if (!self || !self->diagnostic_monitor_ || handle != self->diagnostic_handle_ || !info) return;
+  rapidjson::Document state;
+  state.Parse(info);
+  if (state.HasParseError() || !state.IsObject()) return;
+  if (state.HasMember("cur_work_state") && state["cur_work_state"].IsUint()) {
+    self->diagnostic_monitor_->ObserveWorkState(static_cast<uint8_t>(state["cur_work_state"].GetUint()));
+  }
+  if (!state.HasMember("hms_code") || !state["hms_code"].IsArray() || state["hms_code"].Size() != 8) return;
+  std::array<uint32_t, 8> codes{};
+  for (size_t i = 0; i < codes.size(); ++i) {
+    if (!state["hms_code"][i].IsUint()) return;
+    codes[i] = state["hms_code"][i].GetUint();
+  }
+  self->diagnostic_monitor_->ObserveHms(codes);
+}
+
+void LdsLidar::DiagnosticPacketCallback(uint32_t handle, uint8_t, LivoxLidarEthernetPacket* data, void* context) {
+  auto* self = static_cast<LdsLidar*>(context);
+  if (self && self->diagnostic_monitor_ && handle == self->diagnostic_handle_ && data &&
+      data->data_type != kLivoxLidarImuData) self->diagnostic_monitor_->ObservePacket();
+}
+
+void LdsLidar::ObserveDiagnosticCloud(PointFrame* frame) {
+  if (!diagnostic_monitor_ || !frame) return;
+  for (size_t i = 0; i < frame->lidar_num; ++i) {
+    const auto& cloud = frame->lidar_point[i];
+    if (cloud.handle != diagnostic_handle_) continue;
+    size_t valid_points = 0;
+    if (cloud.points) for (size_t j = 0; j < cloud.points_num; ++j) {
+      const auto& p = cloud.points[j];
+      if (std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z) &&
+          p.x * p.x + p.y * p.y + p.z * p.z > 0.0001f) ++valid_points;
+    }
+    diagnostic_monitor_->ObserveCloud(frame->base_time[i], valid_points);
+  }
+}
+
+void LdsLidar::QueryDiagnosticStatus() {
+  if (!diagnostic_monitor_ || diagnostic_handle_ == 0 || !is_initialized_ ||
+      diagnostic_query_pending_.exchange(true)) return;
+  if (QueryLivoxLidarInternalInfo(diagnostic_handle_, DiagnosticQueryCallback, this) != kLivoxLidarStatusSuccess) {
+    diagnostic_query_pending_ = false;
+  }
+}
+
+void LdsLidar::DiagnosticQueryCallback(livox_status status, uint32_t handle,
+    LivoxLidarDiagInternalInfoResponse* response, void* context) {
+  auto* self = static_cast<LdsLidar*>(context);
+  if (!self) return;
+  self->diagnostic_query_pending_ = false;
+  if (!self->diagnostic_monitor_ || handle != self->diagnostic_handle_ ||
+      status != kLivoxLidarStatusSuccess || !response || response->ret_code != 0) return;
+  // The SDK validates the command envelope. Each requested key is still length-checked.
+  size_t offset = 0;
+  if (response->param_num > 64) return;
+  for (uint16_t i = 0; i < response->param_num; ++i) {
+    uint16_t key = 0, length = 0;
+    if (offset + 4 > 1400) return;
+    std::memcpy(&key, response->data + offset, 2);
+    std::memcpy(&length, response->data + offset + 2, 2);
+    offset += 4;
+    if (offset + length > 1400) return;
+    if (key == kKeyHmsCode && length == 32) {
+      std::array<uint32_t, 8> codes{};
+      std::memcpy(codes.data(), response->data + offset, 32);
+      self->diagnostic_monitor_->ObserveHms(codes);
+    } else if (key == kKeyCurWorkState && length == 1) {
+      self->diagnostic_monitor_->ObserveWorkState(response->data[offset]);
+    }
+    offset += length;
+  }
+}
 
 }  // namespace livox_ros

@@ -28,6 +28,8 @@
 #include "include/ros_headers.h"
 #ifdef BUILDING_ROS2
 #include "functional_safety_heartbeat.h"
+#include "lidar_dtc_monitor.h"
+#include "livox_ros_driver2/msg/lidar_diagnostic_state.hpp"
 #endif
 
 namespace livox_ros {
@@ -74,6 +76,9 @@ class DriverNode final : public rclcpp::Node {
   std::shared_future<void> future_;
   std::promise<void> exit_signal_;
   std::unique_ptr<functional_safety::HeartbeatPublisher> heartbeat_;
+  std::shared_ptr<dtc::Monitor> diagnostic_monitor_;
+  rclcpp::Publisher<livox_ros_driver2::msg::LidarDiagnosticState>::SharedPtr diagnostic_publisher_;
+  rclcpp::TimerBase::SharedPtr diagnostic_timer_, diagnostic_query_timer_;
 };
 #endif
 

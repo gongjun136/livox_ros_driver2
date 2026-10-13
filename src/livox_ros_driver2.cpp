@@ -199,6 +199,51 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
     DRIVER_WARN(*this, "Functional safety heartbeat is disabled for node %s", get_name());
   }
 
+  const std::array<int, 4> role_ids{{7, 12, 8, 9}};
+  const std::array<std::string, 4> role_names{{"front", "rear", "left", "right"}};
+  int default_role = -1;
+  for (size_t i = 0; i < role_ids.size(); ++i) if (heartbeat_config.node_id == role_ids[i]) default_role = i;
+  const int role = declare_parameter<int>("dtc.role", default_role);
+  const bool dtc_enabled = declare_parameter<bool>("dtc.enabled", default_role >= 0);
+  if (dtc_enabled) {
+    if (!heartbeat_ || role < 0 || role >= 4) throw std::invalid_argument("DTC role requires a registered heartbeat and role [0,3]");
+    dtc::MonitorConfig monitor_config;
+    const int data_ms = declare_parameter<int>("dtc.data_timeout_ms", 500);
+    const int state_ms = declare_parameter<int>("dtc.state_timeout_ms", 2500);
+    const int grace_ms = declare_parameter<int>("dtc.startup_grace_ms", 8000);
+    const int min_points = declare_parameter<int>("dtc.min_valid_points", 1);
+    if (data_ms <= 0 || state_ms < 1000 || grace_ms < 0 || min_points <= 0) throw std::invalid_argument("Invalid LiDAR DTC timeouts/point threshold");
+    monitor_config.data_timeout = std::chrono::milliseconds(data_ms);
+    monitor_config.state_timeout = std::chrono::milliseconds(state_ms);
+    monitor_config.startup_grace = std::chrono::milliseconds(grace_ms);
+    monitor_config.min_valid_points = min_points;
+    diagnostic_monitor_ = std::make_shared<dtc::Monitor>(monitor_config);
+    const auto topic = declare_parameter<std::string>("dtc.state_topic", "/sensors/livox/" + role_names[role] + "/diagnostic_state");
+    const auto version = declare_parameter<std::string>("dtc.config_version", "livox-dtc-v1-bench");
+    diagnostic_publisher_ = create_publisher<livox_ros_driver2::msg::LidarDiagnosticState>(topic, rclcpp::QoS(10).reliable().durability_volatile());
+    diagnostic_timer_ = create_wall_timer(std::chrono::milliseconds(100),
+        [this, role, version, source_id = heartbeat_config.node_id, seq = std::make_shared<uint32_t>(0)]() {
+      const auto state = diagnostic_monitor_->Evaluate();
+      livox_ros_driver2::msg::LidarDiagnosticState message;
+      message.role = role;
+      message.comm_header.source_id = source_id;
+      message.comm_header.seq = ++(*seq);
+      message.comm_header.stamp_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+      message.boot_id = heartbeat_->BootId();
+      message.config_version = version;
+      message.usability = state.usability;
+      for (size_t i = 0; i < dtc::kCategories; ++i) {
+        diagnostic_monitor_interfaces::msg::DtcObservation observation;
+        observation.dtc = dtc::Codes(role)[i];
+        observation.physical_condition = state.conditions[i];
+        observation.evaluation_seq = state.hms_seq;
+        observation.evaluation_age_us = state.hms_age_us;
+        message.observations.push_back(observation);
+      }
+      diagnostic_publisher_->publish(message);
+    });
+  }
+
   if (publish_freq > 100.0) {
     publish_freq = 100.0;
   } else if (publish_freq < 0.5) {
@@ -229,11 +274,14 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
     this->get_parameter("cmdline_input_bd_code", cmdline_bd_code);
 
     LdsLidar *read_lidar = LdsLidar::GetInstance(publish_freq);
+    read_lidar->SetDiagnosticMonitor(diagnostic_monitor_);
     lddc_ptr_->RegisterLds(static_cast<Lds *>(read_lidar));
 
     if ((read_lidar->InitLdsLidar(user_config_path))) {
       DRIVER_INFO(*this, "Init lds lidar success!");
       if (heartbeat_) heartbeat_->SetState(functional_safety::NodeState::kIdle);
+      if (diagnostic_monitor_) diagnostic_query_timer_ = create_wall_timer(
+          std::chrono::seconds(1), [read_lidar]() { read_lidar->QueryDiagnosticStatus(); });
     } else {
       DRIVER_ERROR(*this, "Init lds lidar fail!");
       if (heartbeat_) {

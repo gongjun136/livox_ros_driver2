@@ -32,6 +32,8 @@ DriverNode& DriverNode::GetNode() noexcept {
 }
 
 DriverNode::~DriverNode() {
+  diagnostic_timer_.reset();
+  diagnostic_query_timer_.reset();
   if (heartbeat_) {
     heartbeat_->Stop();
   }

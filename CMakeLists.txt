@@ -174,9 +174,18 @@ if(BUILD_DOCS)
 endif()
 
 if(BUILD_TESTING)
+  enable_testing()
+  add_executable(lidar_dtc_monitor_test test/lidar_dtc_monitor_test.cpp)
+  target_include_directories(lidar_dtc_monitor_test PRIVATE src)
+  add_test(NAME lidar_dtc_monitor_test COMMAND lidar_dtc_monitor_test)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+add_executable(lidar_dtc_aggregator src/lidar_dtc_aggregator.cpp src/functional_safety_heartbeat.cpp)
+target_include_directories(lidar_dtc_aggregator PRIVATE src)
+ament_target_dependencies(lidar_dtc_aggregator rclcpp diagnostic_monitor_interfaces livox_ros_driver2)
+install(TARGETS lidar_dtc_aggregator DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY
   launch_ROS2

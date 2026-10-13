@@ -69,6 +69,7 @@ class HeartbeatPublisher final {
   void Stop();
 
   static std::uint64_t GenerateBootId();
+  std::uint64_t BootId() const { return boot_id_; }
   static std::uint32_t Advance(std::atomic<std::uint32_t>& sequence);
 
  private:

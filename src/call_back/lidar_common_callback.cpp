@@ -50,6 +50,7 @@ void LidarCommonCallback::OnLidarPointClounCb(PointFrame* frame, void* client_da
   
   //printf("Lidar point cloud, lidar_num:%u.\n", frame->lidar_num);
 
+  lds_lidar->ObserveDiagnosticCloud(frame);
   lds_lidar->StoragePointData(frame);
 }
 
