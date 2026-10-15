@@ -65,6 +65,8 @@ journalctl -b --no-pager -o short-monotonic \
 
 # 恢复与防复发
 
+现行可部署修复见 @ref livox_time_sync ，复发现场证据见 @ref livox_incident_20261014 。开机校时、PHC 初始化必须发生在 PTP 对外授时之前；仅重启 ROS 驱动不能清除雷达内部异常状态。
+
 确认车辆停稳、允许中断数据、当前授时稳定后，可先软重启一台雷达验证，再处理其他设备；避免直接重启域控或反复拉起驱动替代设备状态检查。设备软重启不等于恢复出厂设置，现场操作使用官方 SDK 或 Viewer。
 
 防复发应检查 RTC 的 UTC/本地时间模式，完成开机初始校时后才让 PTP 对外授时，并限制运行期时钟大幅跳变。配置 `After=chrony.service` 本身不证明初始校时完成，需要等待实际同步条件。
@@ -75,4 +77,4 @@ journalctl -b --no-pager -o short-monotonic \
 sudo timedatectl set-local-rtc 0
 ```
 
-此命令默认把系统时间写入 RTC；不加 `--adjust-system-clock`。参见 [systemd 文档](https://github.com/systemd/systemd/blob/v249/man/timedatectl.xml)。Chrony 的负数 `makestep` 更新次数限制允许长期 step，调整策略需与启动等待和失联保持一起评审，见 [Chrony 4.2 文档](https://chrony-project.org/doc/4.2/chrony.conf.html#makestep)。本手册记录建议，尚未修改现场系统配置。
+此命令默认把系统时间写入 RTC；不加 `--adjust-system-clock`。参见 [systemd 文档](https://github.com/systemd/systemd/blob/v249/man/timedatectl.xml)。Chrony 的负数 `makestep` 更新次数限制允许长期 step，见 [Chrony 4.2 文档](https://chrony-project.org/doc/4.2/chrony.conf.html#makestep)。配置安装和现场验收状态须查对应事故记录，不能从手册存在推断已经部署。

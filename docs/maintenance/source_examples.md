@@ -23,3 +23,7 @@
 @ref record_lidars_cameras_mcap.sh "原始雷达与相机录包"
 
 @ref record_compressed_sensors_mcap.sh "压缩传感器录包"
+
+@ref sany_ptp_guard.py "PTP 启动门槛与 PHC 初始化"
+
+@ref install_sany_ptp_guard.sh "授时防护安装器"

@@ -20,6 +20,10 @@ ros2 launch livox_ros_driver2_core sany_lidar.launch.py vehicle_config:=/absolut
 
 主机运维/DDS 接口在该现场为 `eth10 / 192.168.44.100`。传感器 UDP 与 ROS DDS 是两条链路，分别检查它们的地址和端口。
 
+# 开机授时前置条件
+
+主 Orin 应先按 @ref livox_time_sync 安装并验收时间启动门槛，确保 PTP 不会在系统尚未校时、PHC 尚未初始化时对外授时。运行 `run_lidar.sh` 不能替代这个系统级前置条件。
+
 # 第一步：启动雷达
 
 保存以下入口到项目总目录的 `run_lidar.sh`，文件使用 LF 换行。它与定位入口 `run_loc.sh` 分开运行。

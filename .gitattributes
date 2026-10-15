@@ -1,0 +1,2 @@
+scripts/install_sany_ptp_guard.sh text eol=lf
+scripts/sany_ptp_guard.py text eol=lf

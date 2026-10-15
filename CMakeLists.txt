@@ -175,6 +175,9 @@ endif()
 
 if(BUILD_TESTING)
   enable_testing()
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME sany_ptp_guard_test
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_sany_ptp_guard.py)
   add_executable(lidar_dtc_monitor_test test/lidar_dtc_monitor_test.cpp)
   target_include_directories(lidar_dtc_monitor_test PRIVATE src)
   add_test(NAME lidar_dtc_monitor_test COMMAND lidar_dtc_monitor_test)
@@ -212,6 +215,14 @@ install(PROGRAMS
 
 install(PROGRAMS
   scripts/record_compressed_sensors_mcap.sh
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Optional host-service deployment tools; installing the ROS package does not
+# change systemd, Chrony, RTC, or running sensors.
+install(PROGRAMS
+  scripts/sany_ptp_guard.py
+  scripts/install_sany_ptp_guard.sh
   DESTINATION lib/${PROJECT_NAME}
 )
 

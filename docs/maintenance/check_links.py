@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate manual navigation/relative links and, optionally, generated HTML targets."""
 import argparse
+import json
 from collections import Counter
 from html.parser import HTMLParser
 from pathlib import Path
@@ -67,7 +68,8 @@ def check_sources(root):
         examples = re.findall(r'@example(?:\{[^}]*\})?\s+(\S+)',
                               registry.read_text(encoding='utf-8'))
         scripts = {path.relative_to(root / 'scripts').as_posix()
-                   for path in (root / 'scripts').rglob('*.sh')}
+                   for path in (root / 'scripts').rglob('*')
+                   if path.suffix in ('.sh', '.py')}
         candidates = {path.relative_to(root / folder).as_posix()
                       for folder in ('scripts', 'launch_ROS2', 'config')
                       for path in (root / folder).rglob('*') if path.is_file()}
@@ -103,8 +105,66 @@ class Links(HTMLParser):
             if key in attrs: self.targets.append(attrs[key])
 
 
-def check_html(folder, page_ids):
-    errors, cache = [], {}
+def check_navigation(folder, page_ids, parents):
+    errors, seen = [], Counter()
+
+    def read_array(name):
+        try:
+            if not re.fullmatch(r'\w+', name):
+                raise ValueError('invalid script name')
+            text = (folder / (name + '.js')).read_text(encoding='utf-8')
+            match = re.search(r'\bvar\s+\w+\s*=\s*(\[.*?\]);', text, re.S)
+            data = json.loads(match[1]) if match else None
+            if not isinstance(data, list):
+                raise ValueError('missing array')
+            return data
+        except (OSError, ValueError):
+            errors.append(f'invalid or missing rendered navigation: {name}.js')
+            return []
+
+    def walk(nodes, parent, ancestors):
+        for node in nodes:
+            if not isinstance(node, list) or len(node) != 3 or not isinstance(node[1], str):
+                errors.append('invalid rendered navigation node')
+                continue
+            title, target, children = node
+            url = urlsplit(target)
+            name = Path(url.path).stem
+            child_parent = parent
+            if not url.fragment:
+                if name == 'index' or name in page_ids:
+                    seen[name] += 1
+                    expected = parents.get(name)
+                    if parent != expected:
+                        errors.append(f'rendered parent mismatch: {name}: expected {expected}, got {parent}')
+                    child_parent = name
+                elif name.startswith('md_'):
+                    errors.append(f'unknown rendered manual topic: {title} ({target})')
+                    continue
+                else:
+                    # API indexes are separate from the hand-written manual.
+                    continue
+            if isinstance(children, str):
+                if children in ancestors:
+                    errors.append(f'rendered navigation cycle: {children}')
+                else:
+                    walk(read_array(children), child_parent, (*ancestors, children))
+            elif isinstance(children, list):
+                walk(children, child_parent, ancestors)
+
+    tree = read_array('navtreedata')
+    if tree and len(tree[0]) == 3 and isinstance(tree[0][2], list):
+        walk(tree[0][2], None, ('navtreedata',))
+    else:
+        errors.append('missing rendered manual navigation')
+    for name in ['index', *page_ids]:
+        if seen[name] != 1:
+            errors.append(f'rendered manual page must occur once: {name} ({seen[name]} occurrences)')
+    return errors
+
+
+def check_html(folder, page_ids, parents):
+    errors, cache = check_navigation(folder, page_ids, parents), {}
     def parse(path):
         if path not in cache:
             parser = Links()
@@ -140,7 +200,15 @@ def main():
         ids = []
         for page in (root/'docs').rglob('*.md'):
             ids.extend(re.findall(r'^@page\s+(\w+)',page.read_text(encoding='utf-8'),re.M))
-        errors.extend(check_html(args.html.resolve(), ids))
+        parents = {}
+        for page in (root/'docs').rglob('*.md'):
+            content = page.read_text(encoding='utf-8')
+            match = re.search(r'^@page\s+(\w+)', content, re.M)
+            parent = 'index' if page.name == 'index.md' else (match[1] if match else None)
+            prose = re.sub(r'```.*?```|`[^`\n]*`', '', content, flags=re.S)
+            for child in re.findall(r'@subpage\s+(\w+)', prose):
+                parents[child] = parent
+        errors.extend(check_html(args.html.resolve(), ids, parents))
     for error in errors: print(error)
     print(f'{count} manual pages; {len(errors)} link/navigation errors')
     return bool(errors)

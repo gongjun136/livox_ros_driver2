@@ -46,3 +46,12 @@
  * @example{lineno} record_compressed_sensors_mcap.sh
  * 用途与阅读入口见 @ref livox_source_examples 。
  */
+
+/**
+ * @example{lineno} sany_ptp_guard.py
+ * 授时门槛见 @ref livox_time_sync 。
+ */
+/**
+ * @example{lineno} install_sany_ptp_guard.sh
+ * 维护窗口安装见 @ref livox_time_sync 。
+ */
