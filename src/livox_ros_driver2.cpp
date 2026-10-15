@@ -212,14 +212,17 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
     const int state_ms = declare_parameter<int>("dtc.state_timeout_ms", 2500);
     const int grace_ms = declare_parameter<int>("dtc.startup_grace_ms", 8000);
     const int min_points = declare_parameter<int>("dtc.min_valid_points", 1);
+    const int64_t sync_offset_ns = declare_parameter<int64_t>("dtc.max_sync_offset_ns", 1000000);
     if (data_ms <= 0 || state_ms < 1000 || grace_ms < 0 || min_points <= 0) throw std::invalid_argument("Invalid LiDAR DTC timeouts/point threshold");
+    if (sync_offset_ns <= 0) throw std::invalid_argument("Invalid PTP verification offset threshold");
     monitor_config.data_timeout = std::chrono::milliseconds(data_ms);
     monitor_config.state_timeout = std::chrono::milliseconds(state_ms);
     monitor_config.startup_grace = std::chrono::milliseconds(grace_ms);
     monitor_config.min_valid_points = min_points;
+    monitor_config.max_sync_offset_ns = sync_offset_ns;
     diagnostic_monitor_ = std::make_shared<dtc::Monitor>(monitor_config);
     const auto topic = declare_parameter<std::string>("dtc.state_topic", "/sensors/livox/" + role_names[role] + "/diagnostic_state");
-    const auto version = declare_parameter<std::string>("dtc.config_version", "livox-dtc-v1-bench");
+    const auto version = declare_parameter<std::string>("dtc.config_version", "livox-dtc-v2-sync-source");
     diagnostic_publisher_ = create_publisher<livox_ros_driver2::msg::LidarDiagnosticState>(topic, rclcpp::QoS(10).reliable().durability_volatile());
     diagnostic_timer_ = create_wall_timer(std::chrono::milliseconds(100),
         [this, role, version, source_id = heartbeat_config.node_id, seq = std::make_shared<uint32_t>(0)]() {

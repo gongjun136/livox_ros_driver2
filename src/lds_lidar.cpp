@@ -235,6 +235,14 @@ void LdsLidar::DiagnosticStatusCallback(uint32_t handle, uint8_t, const char* in
   if (state.HasMember("cur_work_state") && state["cur_work_state"].IsUint()) {
     self->diagnostic_monitor_->ObserveWorkState(static_cast<uint8_t>(state["cur_work_state"].GetUint()));
   }
+  if (state.HasMember("time_sync_type") && state["time_sync_type"].IsUint() &&
+      state["time_sync_type"].GetUint() <= 2 &&
+      state.HasMember("local_time_now") && state["local_time_now"].IsUint64() &&
+      state.HasMember("last_sync_time") && state["last_sync_time"].IsUint64() &&
+      state.HasMember("time_offset") && state["time_offset"].IsInt64()) {
+    self->diagnostic_monitor_->ObserveTimeSync(state["time_sync_type"].GetUint(),
+        state["local_time_now"].GetUint64(), state["last_sync_time"].GetUint64(), state["time_offset"].GetInt64());
+  }
   if (!state.HasMember("hms_code") || !state["hms_code"].IsArray() || state["hms_code"].Size() != 8) return;
   std::array<uint32_t, 8> codes{};
   for (size_t i = 0; i < codes.size(); ++i) {
@@ -283,6 +291,12 @@ void LdsLidar::DiagnosticQueryCallback(livox_status status, uint32_t handle,
   // The SDK validates the command envelope. Each requested key is still length-checked.
   size_t offset = 0;
   if (response->param_num > 64) return;
+  std::array<uint32_t, 8> codes{};
+  uint8_t work_state = 0, sync_type = 0;
+  uint64_t local_time = 0, last_sync = 0;
+  int64_t time_offset = 0;
+  bool hms_seen = false, work_seen = false;
+  uint8_t sync_fields = 0;
   for (uint16_t i = 0; i < response->param_num; ++i) {
     uint16_t key = 0, length = 0;
     if (offset + 4 > 1400) return;
@@ -291,14 +305,24 @@ void LdsLidar::DiagnosticQueryCallback(livox_status status, uint32_t handle,
     offset += 4;
     if (offset + length > 1400) return;
     if (key == kKeyHmsCode && length == 32) {
-      std::array<uint32_t, 8> codes{};
       std::memcpy(codes.data(), response->data + offset, 32);
-      self->diagnostic_monitor_->ObserveHms(codes);
+      hms_seen = true;
     } else if (key == kKeyCurWorkState && length == 1) {
-      self->diagnostic_monitor_->ObserveWorkState(response->data[offset]);
+      work_state = response->data[offset]; work_seen = true;
+    } else if (key == kKeyTimeSyncType && length == 1) {
+      sync_type = response->data[offset]; sync_fields |= 1;
+    } else if (key == kKeyLocalTimeNow && length == 8) {
+      std::memcpy(&local_time, response->data + offset, 8); sync_fields |= 2;
+    } else if (key == kKeyLastSyncTime && length == 8) {
+      std::memcpy(&last_sync, response->data + offset, 8); sync_fields |= 4;
+    } else if (key == kKeyTimeOffset && length == 8) {
+      std::memcpy(&time_offset, response->data + offset, 8); sync_fields |= 8;
     }
     offset += length;
   }
+  if (sync_fields == 15) self->diagnostic_monitor_->ObserveTimeSync(sync_type, local_time, last_sync, time_offset);
+  if (work_seen) self->diagnostic_monitor_->ObserveWorkState(work_state);
+  if (hms_seen) self->diagnostic_monitor_->ObserveHms(codes);
 }
 
 }  // namespace livox_ros

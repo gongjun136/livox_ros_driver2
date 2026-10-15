@@ -59,6 +59,7 @@ struct MonitorConfig {
   std::chrono::milliseconds state_timeout{2500};
   std::chrono::milliseconds startup_grace{8000};
   size_t min_valid_points = 1;
+  int64_t max_sync_offset_ns = 1000000;  // Require verified PTP within 1 ms before excluding GPS-only warnings.
 };
 
 struct Snapshot {
@@ -86,6 +87,24 @@ class Monitor {
     state_time_ = now;
     state_seen_ = true;
   }
+  void ObserveTimeSync(uint8_t type, uint64_t local_time, uint64_t last_sync,
+                       int64_t offset, Clock::time_point now = Clock::now()) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto ttl_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(config_.state_timeout).count();
+    const bool healthy = type == 1 && last_sync != 0 && local_time >= last_sync &&
+        local_time - last_sync <= static_cast<uint64_t>(ttl_ns) &&
+        offset >= -config_.max_sync_offset_ns && offset <= config_.max_sync_offset_ns;
+    if (!healthy || (sync_seen_ && last_sync < last_sync_)) {
+      ptp_verified_ = false;
+      return;
+    }
+    // Repeated status queries must not refresh a frozen synchronization source.
+    if (!sync_seen_ || last_sync > last_sync_) {
+      last_sync_ = last_sync;
+      sync_time_ = now;
+      sync_seen_ = ptp_verified_ = true;
+    }
+  }
   void ObservePacket(Clock::time_point now = Clock::now()) {
     std::lock_guard<std::mutex> lock(mutex_);
     packet_time_ = now;
@@ -105,6 +124,7 @@ class Monitor {
     result.hms_seq = hms_seq_;
     result.hms_age_us = AgeUs(now, hms_time_, hms_seen_);
     const bool hms_fresh = hms_seen_ && now - hms_time_ <= config_.state_timeout;
+    const bool healthy_ptp = ptp_verified_ && sync_seen_ && now - sync_time_ <= config_.state_timeout;
     bool fatal = false;
     if (hms_fresh) {
       result.conditions.fill(kPass);
@@ -114,6 +134,10 @@ class Monitor {
         const uint8_t level = static_cast<uint8_t>(code & 0xFF);
         fatal = fatal || level == 4;
         const int category = Category(id);
+        // GPS/PPS warnings do not describe the active clock when independent,
+        // advancing PTP status proves it healthy. Never mask PTP/conflict codes,
+        // a native error/fatal, or warnings without fresh verification.
+        if (healthy_ptp && level == 2 && (id == 0x0404 || (id >= 0x0407 && id <= 0x0409))) continue;
         if (category >= 0) result.conditions[category] = kFail;
       }
     }
@@ -135,12 +159,15 @@ class Monitor {
  private:
   MonitorConfig config_;
   Clock::time_point start_, hms_time_, state_time_, packet_time_, valid_time_;
+  Clock::time_point sync_time_;
   mutable std::mutex mutex_;
   std::array<uint32_t, 8> hms_{};
   uint64_t valid_stamp_ = 0;
+  uint64_t last_sync_ = 0;
   uint32_t hms_seq_ = 0;
   uint8_t work_state_ = 0;
   bool hms_seen_ = false, state_seen_ = false, packet_seen_ = false, valid_seen_ = false;
+  bool sync_seen_ = false, ptp_verified_ = false;
 };
 
 inline std::array<uint8_t, 2> Aggregate(const std::array<uint8_t, 4>& states) {

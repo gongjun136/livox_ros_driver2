@@ -6,6 +6,7 @@ ROS_DOMAIN_ID=166 python3 src/livox_ros_driver2/test/dtc_ros_integration.py
 """
 import os
 import subprocess
+import sys
 import time
 
 import rclpy
@@ -32,8 +33,8 @@ def main():
     pubs = [node.create_publisher(LidarDiagnosticState, f'/sensors/livox/{role}/diagnostic_state', qos)
             for role in ROLES]
     from ament_index_python.packages import get_package_prefix
-    executable = os.path.join(get_package_prefix('livox_ros_driver2_core'),
-                              'lib', 'livox_ros_driver2_core', 'lidar_dtc_aggregator')
+    executable = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
+        get_package_prefix('livox_ros_driver2_core'), 'lib', 'livox_ros_driver2_core', 'lidar_dtc_aggregator')
     process = subprocess.Popen([
         executable, '--ros-args', '-p', 'startup_grace_ms:=600', '-p', 'state_timeout_ms:=300',
     ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -48,7 +49,7 @@ def main():
             msg.comm_header.source_id = IDS[role]
             msg.comm_header.seq = seq[role]
             msg.boot_id = role + 1
-            msg.config_version = 'livox-dtc-v1-bench'
+            msg.config_version = 'livox-dtc-v2-sync-source'
             msg.usability = usability[role]
             for offset in OFFSETS:
                 obs = DtcObservation()

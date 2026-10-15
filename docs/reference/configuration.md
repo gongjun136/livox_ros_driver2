@@ -42,6 +42,16 @@ JSON `lidar_configs` 中 `pcl_data_type=1` 表示设备的 32 位笛卡尔原始
 
 源码入口为 `src/livox_ros_driver2.cpp` 与 @ref livox_ros::Lddc 。旧 LVX、ROS 1 或 PCL 格式注释不代表当前 ROS 2 发布基线支持这些运行方式。
 
+# DTC 同步源验证
+
+驱动与聚合节点当前配置版本均为 `livox-dtc-v2-sync-source`；主、从驱动和聚合节点应同步更新。
+`dtc.state_timeout_ms` 默认 2500 ms，限制状态证据年龄及设备时间到最后同步时刻的间隔；
+`dtc.max_sync_offset_ns` 默认 1000000 ns，是确认 PTP 健康后排除未使用 GPS/PPS 源 Warning 的偏差上限。
+这两个条件只用于证明当前 PTP 有效，不会放宽点云/点包 500 ms 超时或屏蔽原生 Error/Fatal。
+完整字段、同步时刻前进以及当前选用 PTP 缺一不可；重复查询相同的同步时刻不能刷新证明。
+GPS/PPS Warning 的排除范围为 0x0404、0x0407–0x0409；PTP 故障、低精度及 PTP/gPTP 冲突仍上报。
+0x0401、0x0405 的历史源 DTC 继续可见，由兼容安全接口与当前故障区分处理。
+
 # 消息与时间
 
 - 点云使用 `sensor_msgs/msg/PointCloud2`，字段为 `x/y/z/intensity/tag/line/timestamp`；位置单位 m，逐点 `timestamp` 在此实现中为绝对 ns 的 double。

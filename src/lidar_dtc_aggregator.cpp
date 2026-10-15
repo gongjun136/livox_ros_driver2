@@ -31,7 +31,7 @@ class LidarDtcAggregator final : public rclcpp::Node {
     timeout_ = std::chrono::milliseconds(timeout);
     hms_ttl_us_ = static_cast<uint64_t>(hms_ttl) * 1000;
     grace_ = std::chrono::milliseconds(grace);
-    version_ = declare_parameter<std::string>("config_version", "livox-dtc-v1-bench");
+    version_ = declare_parameter<std::string>("config_version", "livox-dtc-v2-sync-source");
     const auto topic = declare_parameter<std::string>("output_topic", "/diagnostics/source_dtc/livox");
     publisher_ = create_publisher<diagnostic_monitor_interfaces::msg::DtcObservationArray>(topic, rclcpp::QoS(10).reliable().durability_volatile());
     const std::array<std::string,4> names{{"front","rear","left","right"}};

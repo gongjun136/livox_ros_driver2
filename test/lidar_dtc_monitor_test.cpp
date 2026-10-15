@@ -29,6 +29,47 @@ int main() {
   monitor.ObserveCloud(10, 1, later);
   Require(monitor.Evaluate(later).usability == kUnusable, "frozen source stamp remains unavailable");
   Require(monitor.Evaluate(later).conditions[9] == kUnknown, "expired HMS does not recover");
+  Monitor ptp({}, start);
+  ptp.ObserveHms({{0x04050002, 0x04090002}}, start);
+  ptp.ObserveWorkState(1, start);
+  ptp.ObservePacket(start);
+  ptp.ObserveCloud(100, 20, start);
+  Require(ptp.Evaluate(start).conditions[1] == kFail, "GPS warning cannot be ignored without PTP evidence");
+  // Captured healthy SANY PTP: sampling, advancing sync, about -5 us offset,
+  // but firmware retains synchronization history and an unused GPS warning.
+  ptp.ObserveTimeSync(1, 10000000000ULL, 9500000000ULL, -5000, start);
+  Require(ptp.Evaluate(start).conditions[1] == kPass, "verified PTP excludes an unused GPS-source warning");
+  Require(ptp.Evaluate(start).conditions[10] == kFail, "synchronization history remains visible in source DTC");
+  for (uint32_t id : {0x0404u, 0x0407u, 0x0408u, 0x0409u}) {
+    ptp.ObserveHms({{(id << 16) | 2}}, start);
+    Require(ptp.Evaluate(start).conditions[1] == kPass, "only GPS/PPS warnings are excluded under verified PTP");
+  }
+  for (uint32_t id : {0x0402u, 0x0403u, 0x0406u, 0x040Au}) {
+    ptp.ObserveHms({{0x04090002, (id << 16) | 2}}, start);
+    Require(ptp.Evaluate(start).conditions[1] == kFail, "PTP/accuracy/conflicting-clock alarms remain active");
+  }
+  ptp.ObserveHms({{0x04090004}}, start);
+  Require(ptp.Evaluate(start).conditions[1] == kFail && ptp.Evaluate(start).usability == kUnusable,
+          "source filtering never masks a native fatal");
+  ptp.ObserveHms({{0x04090003}}, start);
+  Require(ptp.Evaluate(start).conditions[1] == kFail, "source filtering never masks a native error");
+  ptp.ObserveHms({{0x04090002}}, start);
+  ptp.ObserveTimeSync(2, 10000000000ULL, 9500000000ULL, -5000, start);
+  Require(ptp.Evaluate(start).conditions[1] == kFail, "active GPS source keeps its GPS warning");
+  ptp.ObserveTimeSync(1, 11000000000ULL, 10500000000ULL, -5000, start);
+  Require(ptp.Evaluate(start).conditions[1] == kPass, "advancing healthy PTP recovers source selection");
+  const auto expired = start + std::chrono::milliseconds(2501);
+  ptp.ObserveHms({{0x04090002}}, expired);
+  ptp.ObserveTimeSync(1, 11000000000ULL, 10500000000ULL, -5000, expired);
+  Require(ptp.Evaluate(expired).conditions[1] == kFail, "repeated sync samples cannot refresh expired proof");
+  ptp.ObserveTimeSync(1, 12000000000ULL, 11500000000ULL, 1000001, expired);
+  Require(ptp.Evaluate(expired).conditions[1] == kFail, "large PTP offset cannot suppress warnings");
+  ptp.ObserveTimeSync(1, 12000000000ULL, 11500000000ULL, -5000, expired);
+  Require(ptp.Evaluate(expired).conditions[1] == kPass, "new valid proof restores selection");
+  ptp.ObserveTimeSync(1, 10000000000ULL, 9500000000ULL, -5000, expired);
+  Require(ptp.Evaluate(expired).conditions[1] == kFail, "backward synchronization time invalidates proof");
+  ptp.ObserveTimeSync(1, 14000000000ULL, 10000000000ULL, -5000, expired);
+  Require(ptp.Evaluate(expired).conditions[1] == kFail, "stale source time cannot suppress warnings");
   Require(Aggregate({{2,2,1,1}}) == std::array<uint8_t,2>{{kFail,kPass}}, "two failed");
   Require(Aggregate({{2,2,2,2}}) == std::array<uint8_t,2>{{kFail,kFail}}, "four means BOTH DTCs");
   Require(Aggregate({{2,0,1,1}}) == std::array<uint8_t,2>{{kUnknown,kPass}}, "unknown interval");

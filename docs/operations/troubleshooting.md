@@ -59,7 +59,14 @@ journalctl -b --no-pager -o short-monotonic \
 
 按实际服务名称读取其他网卡日志。重点看启动次序、`System clock was stepped`、PHC 回退与 PTP 选主；当前已经同步不等于启动时没有回退。
 
-设备状态可通过 Livox 官方只读参数查询读取 `cur_work_state`、点云目标地址、`time_sync_type`、`last_sync_time`、`time_offset` 和 `hms_code`。`0x04050002` 为时间同步异常 Warning；HMS 可能保留历史事件，必须联合日志和恢复试验判断。
+设备状态可通过 Livox 官方只读参数查询读取 `cur_work_state`、点云目标地址、`time_sync_type`、`last_sync_time`、`time_offset` 和 `hms_code`。`0x04050002` 为时间同步曾异常的历史 Warning；HMS 可能保留历史事件，必须联合当前状态和日志判断。
+
+2026-10-15 对 sany-03-master 的只读查询中，前、左、右三台均为 Sampling、`lidar_diag_status=0`，
+PTP 偏差约 -5 微秒，同步时刻连续前进；HMS 均有 0x04050002，左雷达另有 0x04090002。
+官方表中 0x0409 表示 GPS 信号异常；不能将其解释为当前 PTP 故障。
+`livox-dtc-v2-sync-source` 只有在完整、新鲜、前进且偏差合格的 PTP 证据下排除这些未使用源的 Warning，
+其条件和参数见 @ref livox_configuration 。历史提示仍上报，真实当前授时故障、断流和不可用保护保留。
+此次只读查询不代表更新已经部署，也没有通过软重启清除 HMS。
 
 [Livox 官方协议](https://github.com/Livox-SDK/livox_wiki_en/blob/master/source/tutorials/new_product/mid360/livox_eth_protocol_mid360.md) 说明默认时间过滤模式下时间回退可能造成点云中断。[HMS 表](https://github.com/Livox-SDK/livox_wiki_en/blob/master/source/tutorials/new_product/mid360/hms_code_mid360.rst) 给出告警含义。固件不支持的查询会返回 `0x20`，不能把未返回的字段当成 0 或关闭。
 
