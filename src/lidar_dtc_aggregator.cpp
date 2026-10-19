@@ -32,7 +32,7 @@ class LidarDtcAggregator final : public rclcpp::Node {
     hms_ttl_us_ = static_cast<uint64_t>(hms_ttl) * 1000;
     grace_ = std::chrono::milliseconds(grace);
     version_ = declare_parameter<std::string>("config_version", "livox-dtc-v2-sync-source");
-    const auto topic = declare_parameter<std::string>("output_topic", "/diagnostics/source_dtc/livox");
+    const auto topic = declare_parameter<std::string>("internal_output_topic", "/internal/diagnostics/livox_dtc");
     publisher_ = create_publisher<diagnostic_monitor_interfaces::msg::DtcObservationArray>(topic, rclcpp::QoS(10).reliable().durability_volatile());
     const std::array<std::string,4> names{{"front","rear","left","right"}};
     for (size_t i = 0; i < 4; ++i) {
@@ -116,6 +116,19 @@ class LidarDtcAggregator final : public rclcpp::Node {
       result.observations.push_back(observation);
     }
     std::sort(result.observations.begin(),result.observations.end(),[](const auto& a,const auto& b){return a.dtc<b.dtc;});
+    std::vector<uint32_t> failed, passed;
+    for (const auto& observation : result.observations) {
+      // Recovered communication/synchronization events are historical, not active faults.
+      bool historical = false;
+      for (size_t role = 0; role < 4; ++role) {
+        const auto base = dtc::Codes(role)[0];
+        historical |= observation.dtc == base + 12 || observation.dtc == base + 13;
+      }
+      if (historical) continue;
+      if (observation.physical_condition == dtc::kFail) failed.push_back(observation.dtc);
+      if (observation.physical_condition == dtc::kPass) passed.push_back(observation.dtc);
+    }
+    heartbeat_->UpdateFaults(failed, passed);
     publisher_->publish(result);
     heartbeat_->RecordWork();
     heartbeat_->SetState(functional_safety::NodeState::kRunning);

@@ -44,6 +44,15 @@ JSON `lidar_configs` 中 `pcl_data_type=1` 表示设备的 32 位笛卡尔原始
 
 # DTC 同步源验证
 
+对外活动 DTC 由聚合节点 ID 13 的 `/diagnostics/heartbeat/livox_dtc` 统一发布，
+四台驱动心跳不重复携带设备码。需使用 common/message dev 已有的
+`NodeHeartbeat.active_fault` 定义，并在诊断中心将非历史码登记给 ID 13。
+FAIL 加入，只有新鲜 PASS 清除，UNKNOWN/过期保留；历史码 base+12/base+13 不进入心跳。
+完整观测（含历史和证据年龄）通过 `internal_output_topic` 发布，默认
+`/internal/diagnostics/livox_dtc`，只供定位 Safety 内部消费。
+旧 `output_topic` 参数不再使用；统一诊断端不得同时消费内部观测或旧兼容状态。
+本次活动缓存不跨进程重启，诊断中心仍须处理 boot_id 变化及启动未知状态。
+
 驱动与聚合节点当前配置版本均为 `livox-dtc-v2-sync-source`；主、从驱动和聚合节点应同步更新。
 `dtc.state_timeout_ms` 默认 2500 ms，限制状态证据年龄及设备时间到最后同步时刻的间隔；
 `dtc.max_sync_offset_ns` 默认 1000000 ns，是确认 PTP 健康后排除未使用 GPS/PPS 源 Warning 的偏差上限。

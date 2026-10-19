@@ -226,4 +226,12 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+
+if(BUILD_TESTING)
+  add_executable(heartbeat_dtc_test test/heartbeat_dtc_test.cpp src/functional_safety_heartbeat.cpp)
+  target_include_directories(heartbeat_dtc_test PRIVATE src)
+  ament_target_dependencies(heartbeat_dtc_test rclcpp diagnostic_monitor_interfaces)
+  add_test(NAME heartbeat_dtc_test COMMAND heartbeat_dtc_test)
+endif()
+
 ament_auto_package()

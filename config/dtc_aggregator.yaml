@@ -4,7 +4,7 @@ lidar_dtc_aggregator:
     functional_safety.node_id: 13
     functional_safety.heartbeat_topic: /diagnostics/heartbeat/livox_dtc
     expected_source_ids: [7, 12, 8, 9]  # front, rear, left, right
-    output_topic: /diagnostics/source_dtc/livox
+    internal_output_topic: /internal/diagnostics/livox_dtc
     config_version: livox-dtc-v2-sync-source
     state_timeout_ms: 500
     hms_timeout_ms: 2500

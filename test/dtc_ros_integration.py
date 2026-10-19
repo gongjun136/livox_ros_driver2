@@ -11,7 +11,7 @@ import time
 
 import rclpy
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
-from diagnostic_monitor_interfaces.msg import DtcObservation, DtcObservationArray
+from diagnostic_monitor_interfaces.msg import DtcObservation, DtcObservationArray, NodeHeartbeat
 from livox_ros_driver2.msg import LidarDiagnosticState
 
 ROLES = ('front', 'rear', 'left', 'right')
@@ -27,8 +27,10 @@ def main():
     node = rclpy.create_node('dtc_integration_probe')
     qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE,
                      durability=DurabilityPolicy.VOLATILE)
-    messages = []
-    node.create_subscription(DtcObservationArray, '/diagnostics/source_dtc/livox',
+    messages, heartbeats = [], []
+    node.create_subscription(NodeHeartbeat, '/diagnostics/heartbeat/livox_dtc', heartbeats.append,
+                             QoSProfile(depth=100, reliability=ReliabilityPolicy.BEST_EFFORT))
+    node.create_subscription(DtcObservationArray, '/internal/diagnostics/livox_dtc',
                              lambda msg: messages.append(msg), qos)
     pubs = [node.create_publisher(LidarDiagnosticState, f'/sensors/livox/{role}/diagnostic_state', qos)
             for role in ROLES]
@@ -39,8 +41,9 @@ def main():
         executable, '--ros-args', '-p', 'startup_grace_ms:=600', '-p', 'state_timeout_ms:=300',
     ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     seq = [0] * 4
+    boots = [role + 1 for role in range(4)]
 
-    def transmit(usability=(1, 1, 1, 1), hms_age=0, repeat=False):
+    def transmit(usability=(1, 1, 1, 1), hms_age=0, repeat=False, condition=1):
         for role, pub in enumerate(pubs):
             if not repeat:
                 seq[role] += 1
@@ -48,24 +51,24 @@ def main():
             msg.role = role
             msg.comm_header.source_id = IDS[role]
             msg.comm_header.seq = seq[role]
-            msg.boot_id = role + 1
+            msg.boot_id = boots[role]
             msg.config_version = 'livox-dtc-v2-sync-source'
             msg.usability = usability[role]
             for offset in OFFSETS:
                 obs = DtcObservation()
                 obs.dtc = BASES[role] + offset
-                obs.physical_condition = 1
+                obs.physical_condition = condition
                 obs.evaluation_seq = seq[role]
                 obs.evaluation_age_us = hms_age
                 msg.observations.append(obs)
             pub.publish(msg)
 
-    def run(duration, states=None, hms_age=0, repeat=False):
+    def run(duration, states=None, hms_age=0, repeat=False, condition=1):
         end = time.monotonic() + duration
         next_send = 0.0
         while time.monotonic() < end:
             if states is not None and time.monotonic() >= next_send:
-                transmit(states, hms_age, repeat)
+                transmit(states, hms_age, repeat, condition)
                 next_send = time.monotonic() + 0.05
             rclpy.spin_once(node, timeout_sec=0.01)
             if process.poll() is not None:
@@ -74,7 +77,7 @@ def main():
     def latest():
         assert messages, ('aggregator did not publish; nodes=' + repr(node.get_node_names()) +
                           '; matched_driver_subscriptions=' + repr([pub.get_subscription_count() for pub in pubs]) +
-                          '; dtc_publishers=' + repr(node.count_publishers('/diagnostics/source_dtc/livox')))
+                          '; dtc_publishers=' + repr(node.count_publishers('/internal/diagnostics/livox_dtc')))
         msg = messages[-1]
         assert len(msg.observations) == 46
         assert len(set(obs.dtc for obs in msg.observations)) == 46
@@ -82,13 +85,42 @@ def main():
         assert msg.comm_header.source_id == 13 and msg.boot_id != 0 and msg.interface_version == 1
         return {obs.dtc: obs.physical_condition for obs in msg.observations}
 
+    def active():
+        assert heartbeats, 'no aggregator heartbeat'
+        msg = heartbeats[-1]
+        assert msg.node_id == 13 and msg.boot_id == messages[-1].boot_id
+        codes = list(msg.active_fault)
+        assert codes == sorted(set(codes)) and 0 not in codes
+        assert not any(base + offset in codes for base in BASES for offset in (12, 13))
+        assert node.count_publishers('/diagnostics/source_dtc/livox') == 0
+        return set(codes)
+
     try:
         run(4.0, (1, 1, 1, 1))
         assert set(latest().values()) == {1}, 'all healthy snapshot'
-        run(0.35, (2, 2, 1, 1))
+        assert active() == set()
+        run(0.5, (1, 1, 1, 1), condition=2)
+        expected = {base + offset for base in BASES for offset in OFFSETS if offset not in (12, 13)}
+        assert active() == expected, 'all current device FAIL codes, no historical codes'
+        assert all(latest()[base + 12] == 2 for base in BASES), 'internal history must be preserved'
+        run(0.5, (1, 1, 1, 1), condition=0)
+        assert active() == expected, 'UNKNOWN must retain active faults'
+        run(0.5, (1, 1, 1, 1), hms_age=3_000_000)
+        assert active() == expected, 'expired PASS must not recover'
+        run(0.8)  # Source timeout + evaluation period + heartbeat period.
+        assert active() == expected | {0x10F00001, 0x10F00002}, 'source outage retains device faults'
+        boots[:] = [boot + 100 for boot in boots]
+        seq[:] = [0] * 4
+        run(0.5, (1, 1, 1, 1), condition=0)
+        assert active() == expected, 'source reboot with UNKNOWN must not clear previous device faults'
+        run(0.5, (1, 1, 1, 1))
+        assert active() == set(), 'fresh PASS clears activity'
+        run(0.5, (2, 2, 1, 1))
         assert latest()[0x10F00001] == 2 and latest()[0x10F00002] == 1, 'two unavailable'
-        run(0.35, (2, 2, 2, 2))
+        assert active() == {0x10F00001}
+        run(0.5, (2, 2, 2, 2))
         assert latest()[0x10F00001] == 2 and latest()[0x10F00002] == 2, 'all unavailable activates both'
+        assert active() == {0x10F00001, 0x10F00002}
         run(0.35, (1, 1, 1, 1))
         assert set(latest().values()) == {1}, 'fresh recovery'
         run(0.5, (1, 1, 1, 1), repeat=True)
