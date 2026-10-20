@@ -185,11 +185,6 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-add_executable(lidar_dtc_aggregator src/lidar_dtc_aggregator.cpp src/functional_safety_heartbeat.cpp)
-target_include_directories(lidar_dtc_aggregator PRIVATE src)
-ament_target_dependencies(lidar_dtc_aggregator rclcpp diagnostic_monitor_interfaces livox_ros_driver2)
-install(TARGETS lidar_dtc_aggregator DESTINATION lib/${PROJECT_NAME})
-
 install(DIRECTORY
   launch_ROS2
   config
@@ -232,6 +227,10 @@ if(BUILD_TESTING)
   target_include_directories(heartbeat_dtc_test PRIVATE src)
   ament_target_dependencies(heartbeat_dtc_test rclcpp diagnostic_monitor_interfaces)
   add_test(NAME heartbeat_dtc_test COMMAND heartbeat_dtc_test)
+  add_executable(driver_dtc_reporting_test test/driver_dtc_reporting_test.cpp src/functional_safety_heartbeat.cpp)
+  target_include_directories(driver_dtc_reporting_test PRIVATE src)
+  ament_target_dependencies(driver_dtc_reporting_test rclcpp diagnostic_monitor_interfaces livox_ros_driver2)
+  add_test(NAME driver_dtc_reporting_test COMMAND driver_dtc_reporting_test)
 endif()
 
 ament_auto_package()

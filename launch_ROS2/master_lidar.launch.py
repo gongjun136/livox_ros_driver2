@@ -28,8 +28,6 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        IncludeLaunchDescription(PythonLaunchDescriptionSource(
-            os.path.join(launch_dir, 'lidar_dtc_aggregator.launch.py'))),
         front,
         left,
         right,

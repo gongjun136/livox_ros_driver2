@@ -225,28 +225,9 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
     const auto version = declare_parameter<std::string>("dtc.config_version", "livox-dtc-v3-bounded-sync");
     diagnostic_publisher_ = create_publisher<livox_ros_driver2::msg::LidarDiagnosticState>(topic, rclcpp::QoS(10).reliable().durability_volatile());
     diagnostic_timer_ = create_wall_timer(std::chrono::milliseconds(100),
-        [this, role, version, source_id = heartbeat_config.node_id, seq = std::make_shared<uint32_t>(0)]() {
+        [this, role, version, seq = std::make_shared<uint32_t>(0)]() {
       const auto state = diagnostic_monitor_->Evaluate();
-      livox_ros_driver2::msg::LidarDiagnosticState message;
-      message.role = role;
-      message.comm_header.source_id = source_id;
-      message.comm_header.seq = ++(*seq);
-      message.comm_header.stamp_us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-      message.boot_id = heartbeat_->BootId();
-      message.config_version = version;
-      message.usability = state.usability;
-      message.bounded_time_sync_warning = state.bounded_time_sync_warning;
-      message.time_sync_offset_ns = state.time_sync_offset_ns;
-      message.time_sync_evidence_age_us = state.time_sync_evidence_age_us;
-      for (size_t i = 0; i < dtc::kCategories; ++i) {
-        diagnostic_monitor_interfaces::msg::DtcObservation observation;
-        observation.dtc = dtc::Codes(role)[i];
-        observation.physical_condition = state.conditions[i];
-        observation.evaluation_seq = state.hms_seq;
-        observation.evaluation_age_us = state.hms_age_us;
-        message.observations.push_back(observation);
-      }
-      diagnostic_publisher_->publish(message);
+      dtc::PublishDiagnosticSnapshot(*heartbeat_, state, role, version, ++(*seq), *diagnostic_publisher_);
     });
   }
 

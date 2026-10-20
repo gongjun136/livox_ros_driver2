@@ -70,7 +70,6 @@ int main() {
   Require(ptp.Evaluate(expired).conditions[1] == kFail, "backward synchronization time invalidates proof");
   ptp.ObserveTimeSync(1, 14000000000ULL, 10000000000ULL, -5000, expired);
   Require(ptp.Evaluate(expired).conditions[1] == kFail, "stale source time cannot suppress warnings");
-  Require(Aggregate({{2,2,1,1}}) == std::array<uint8_t,2>{{kFail,kPass}}, "two failed");
   Monitor bounded_monitor({}, start);
   auto bounded_feed = [&](int seconds, int64_t offset = 1000000, uint32_t code = 0x04060002) {
     const auto t = start + std::chrono::seconds(seconds);
@@ -108,8 +107,6 @@ int main() {
   bounded_monitor.ObserveWorkState(1, frozen);
   bounded_monitor.ObserveTimeSync(1, 21501000000ULL, 18500000000ULL, 0, frozen);
   Require(!bounded_monitor.Evaluate(frozen).bounded_time_sync_warning, "frozen sync source cannot refresh proof");
-  Require(Aggregate({{2,2,2,2}}) == std::array<uint8_t,2>{{kFail,kFail}}, "four means BOTH DTCs");
-  Require(Aggregate({{2,0,1,1}}) == std::array<uint8_t,2>{{kUnknown,kPass}}, "unknown interval");
   std::set<uint32_t> codes;
   for (size_t role = 0; role < 4; ++role) for (auto code : Codes(role)) codes.insert(code);
   Require(codes.size() == 44, "44 unique single radar codes");

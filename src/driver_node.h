@@ -29,6 +29,7 @@
 #ifdef BUILDING_ROS2
 #include "functional_safety_heartbeat.h"
 #include "lidar_dtc_monitor.h"
+#include "lidar_dtc_reporting.h"
 #include "livox_ros_driver2/msg/lidar_diagnostic_state.hpp"
 #endif
 

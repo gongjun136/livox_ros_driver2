@@ -14,8 +14,6 @@ namespace dtc {
 using Clock = std::chrono::steady_clock;
 enum Condition : uint8_t { kUnknown = 0, kPass = 1, kFail = 2 };
 enum Usability : uint8_t { kUnavailableUnknown = 0, kUsable = 1, kUnusable = 2 };
-constexpr uint32_t kMultipleFailed = 0x10F00001;
-constexpr uint32_t kAllFailed = 0x10F00002;
 constexpr size_t kCategories = 11;
 
 inline const std::array<uint32_t, kCategories>& Codes(size_t role) {
@@ -217,15 +215,6 @@ class Monitor {
   Clock::time_point bounded_sample_time_, bounded_advance_time_;
 };
 
-inline std::array<uint8_t, 2> Aggregate(const std::array<uint8_t, 4>& states) {
-  size_t failed = 0, unknown = 0;
-  for (uint8_t state : states) {
-    failed += state == kUnusable;
-    unknown += state == kUnavailableUnknown;
-  }
-  return {{static_cast<uint8_t>(failed >= 2 ? kFail : failed + unknown < 2 ? kPass : kUnknown),
-           static_cast<uint8_t>(failed == 4 ? kFail : failed + unknown < 4 ? kPass : kUnknown)}};
-}
 }  // namespace dtc
 }  // namespace livox_ros
 #endif
