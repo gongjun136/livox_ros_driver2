@@ -71,6 +71,42 @@ int main() {
   ptp.ObserveTimeSync(1, 14000000000ULL, 10000000000ULL, -5000, expired);
   Require(ptp.Evaluate(expired).conditions[1] == kFail, "stale source time cannot suppress warnings");
   Require(Aggregate({{2,2,1,1}}) == std::array<uint8_t,2>{{kFail,kPass}}, "two failed");
+  Monitor bounded_monitor({}, start);
+  auto bounded_feed = [&](int seconds, int64_t offset = 1000000, uint32_t code = 0x04060002) {
+    const auto t = start + std::chrono::seconds(seconds);
+    bounded_monitor.ObserveWorkState(1, t);
+    bounded_monitor.ObservePacket(t);
+    bounded_monitor.ObserveCloud(1000 + seconds, 20, t);
+    bounded_monitor.ObserveHms({{code}}, t);
+    bounded_monitor.ObserveTimeSync(1, 10000000000ULL + seconds * 1000000000ULL,
+        9500000000ULL + seconds * 1000000000ULL, offset, t);
+    return bounded_monitor.Evaluate(t);
+  };
+  Require(!bounded_feed(0).bounded_time_sync_warning && !bounded_feed(1).bounded_time_sync_warning,
+          "one sample or one advance cannot authorize a bounded warning");
+  const auto proven = bounded_feed(2);
+  Require(proven.bounded_time_sync_warning && proven.conditions[1] == kFail,
+          "two advances within inclusive 1 ms allow advisory evidence but preserve source DTC FAIL");
+  Require(!bounded_feed(3, 1000001).bounded_time_sync_warning, "1 ms plus 1 ns is blocking");
+  Require(!bounded_feed(4, -1000000).bounded_time_sync_warning &&
+          bounded_feed(5, -1000000).bounded_time_sync_warning, "negative inclusive bound requires fresh proof");
+  for (uint32_t alarm : {0x04020002u, 0x04030002u, 0x040A0002u, 0x04060003u, 0x04060004u}) {
+    bounded_monitor.ObserveHms({{0x04060002, alarm}}, start + std::chrono::seconds(5));
+    Require(!bounded_monitor.Evaluate(start + std::chrono::seconds(5)).bounded_time_sync_warning,
+            "loss, conflict, unknown time alarm or error/fatal is never advisory");
+  }
+  bounded_monitor.ObserveHms({{0x04060002}}, start + std::chrono::seconds(5));
+  bounded_monitor.ObserveTimeSync(1, 16020000000ULL, 15520000000ULL, 0, start + std::chrono::seconds(6));
+  Require(!bounded_monitor.Evaluate(start + std::chrono::seconds(6)).bounded_time_sync_warning,
+          "forward device clock discontinuity revokes proof even with small reported offset");
+  bounded_feed(7, 0); bounded_feed(8, 0);
+  Require(bounded_feed(9, 0).bounded_time_sync_warning, "continuous new evidence recovers");
+  const auto frozen = start + std::chrono::milliseconds(11501);
+  bounded_monitor.ObserveHms({{0x04060002}}, frozen);
+  bounded_monitor.ObservePacket(frozen); bounded_monitor.ObserveCloud(5000, 20, frozen);
+  bounded_monitor.ObserveWorkState(1, frozen);
+  bounded_monitor.ObserveTimeSync(1, 21501000000ULL, 18500000000ULL, 0, frozen);
+  Require(!bounded_monitor.Evaluate(frozen).bounded_time_sync_warning, "frozen sync source cannot refresh proof");
   Require(Aggregate({{2,2,2,2}}) == std::array<uint8_t,2>{{kFail,kFail}}, "four means BOTH DTCs");
   Require(Aggregate({{2,0,1,1}}) == std::array<uint8_t,2>{{kUnknown,kPass}}, "unknown interval");
   std::set<uint32_t> codes;

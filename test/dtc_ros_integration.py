@@ -52,7 +52,7 @@ def main():
             msg.comm_header.source_id = IDS[role]
             msg.comm_header.seq = seq[role]
             msg.boot_id = boots[role]
-            msg.config_version = 'livox-dtc-v2-sync-source'
+            msg.config_version = 'livox-dtc-v3-bounded-sync'
             msg.usability = usability[role]
             for offset in OFFSETS:
                 obs = DtcObservation()

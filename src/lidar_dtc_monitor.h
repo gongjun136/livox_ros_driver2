@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <mutex>
@@ -67,6 +68,9 @@ struct Snapshot {
   uint32_t hms_seq = 0;
   uint64_t hms_age_us = std::numeric_limits<uint64_t>::max();
   uint8_t usability = kUnavailableUnknown;
+  bool bounded_time_sync_warning = false;
+  int64_t time_sync_offset_ns = 0;
+  uint64_t time_sync_evidence_age_us = std::numeric_limits<uint64_t>::max();
 };
 
 class Monitor {
@@ -90,6 +94,26 @@ class Monitor {
   void ObserveTimeSync(uint8_t type, uint64_t local_time, uint64_t last_sync,
                        int64_t offset, Clock::time_point now = Clock::now()) {
     std::lock_guard<std::mutex> lock(mutex_);
+    // Separate proof for the consumer's bounded warning policy. Keep the
+    // original source DTC and GPS-source verification semantics unchanged.
+    const auto host_delta = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        now - bounded_sample_time_).count();
+    const bool clock_continuous = bounded_seen_ && local_time >= bounded_local_ &&
+        host_delta >= 0 &&
+        std::abs(static_cast<double>(local_time - bounded_local_) - host_delta) <= 1000000.0;
+    const bool bounded = type == 1 && last_sync != 0 && local_time >= last_sync &&
+        local_time - last_sync <= 2500000000ULL && offset >= -1000000 && offset <= 1000000 &&
+        (!bounded_seen_ || last_sync >= bounded_last_sync_);
+    if (!bounded || !clock_continuous) bounded_advances_ = 0;
+    else if (last_sync > bounded_last_sync_) {
+      bounded_advances_ = std::min(2u, bounded_advances_ + 1);
+      bounded_advance_time_ = now;
+    }
+    bounded_seen_ = true;
+    bounded_local_ = local_time;
+    bounded_last_sync_ = last_sync;
+    bounded_sample_time_ = now;
+    bounded_offset_ = offset;
     const auto ttl_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(config_.state_timeout).count();
     const bool healthy = type == 1 && last_sync != 0 && local_time >= last_sync &&
         local_time - last_sync <= static_cast<uint64_t>(ttl_ns) &&
@@ -125,6 +149,9 @@ class Monitor {
     result.hms_age_us = AgeUs(now, hms_time_, hms_seen_);
     const bool hms_fresh = hms_seen_ && now - hms_time_ <= config_.state_timeout;
     const bool healthy_ptp = ptp_verified_ && sync_seen_ && now - sync_time_ <= config_.state_timeout;
+    result.time_sync_offset_ns = bounded_offset_;
+    result.time_sync_evidence_age_us = AgeUs(now, bounded_advance_time_, bounded_advances_ >= 2);
+    bool bounded_warning = false, incompatible_sync_alarm = false;
     bool fatal = false;
     if (hms_fresh) {
       result.conditions.fill(kPass);
@@ -134,6 +161,13 @@ class Monitor {
         const uint8_t level = static_cast<uint8_t>(code & 0xFF);
         fatal = fatal || level == 4;
         const int category = Category(id);
+        if (category == 1) {
+          // Only an accuracy warning may be advisory. Never downgrade
+          // synchronization loss, clock conflict, unknown codes, errors/fatal.
+          bounded_warning |= id == 0x0406 && level == 2;
+          incompatible_sync_alarm |= level != 2 ||
+              !(id == 0x0406 || id == 0x0404 || (id >= 0x0407 && id <= 0x0409));
+        }
         // GPS/PPS warnings do not describe the active clock when independent,
         // advancing PTP status proves it healthy. Never mask PTP/conflict codes,
         // a native error/fatal, or warnings without fresh verification.
@@ -153,6 +187,11 @@ class Monitor {
     } else if (state_fresh && work_state_ != 1 && now - start_ >= config_.startup_grace) {
       result.usability = kUnusable;
     }
+    result.bounded_time_sync_warning = hms_fresh && bounded_warning && !incompatible_sync_alarm &&
+        result.usability == kUsable && bounded_advances_ >= 2 &&
+        result.time_sync_evidence_age_us <= 2500000 &&
+        now - bounded_advance_time_ <= config_.state_timeout &&
+        bounded_offset_ >= -1000000 && bounded_offset_ <= 1000000;
     return result;
   }
 
@@ -168,6 +207,11 @@ class Monitor {
   uint8_t work_state_ = 0;
   bool hms_seen_ = false, state_seen_ = false, packet_seen_ = false, valid_seen_ = false;
   bool sync_seen_ = false, ptp_verified_ = false;
+  bool bounded_seen_ = false;
+  unsigned bounded_advances_ = 0;
+  uint64_t bounded_local_ = 0, bounded_last_sync_ = 0;
+  int64_t bounded_offset_ = 0;
+  Clock::time_point bounded_sample_time_, bounded_advance_time_;
 };
 
 inline std::array<uint8_t, 2> Aggregate(const std::array<uint8_t, 4>& states) {
