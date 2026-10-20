@@ -90,7 +90,8 @@ int main() {
   Require(!bounded_feed(3, 1000001).bounded_time_sync_warning, "1 ms plus 1 ns is blocking");
   Require(!bounded_feed(4, -1000000).bounded_time_sync_warning &&
           bounded_feed(5, -1000000).bounded_time_sync_warning, "negative inclusive bound requires fresh proof");
-  for (uint32_t alarm : {0x04020002u, 0x04030002u, 0x040A0002u, 0x04060003u, 0x04060004u}) {
+  for (uint32_t alarm : {0x04020002u, 0x04030002u, 0x040A0002u, 0x040B0002u,
+                         0x7FFF0002u, 0x04060003u, 0x04060004u}) {
     bounded_monitor.ObserveHms({{0x04060002, alarm}}, start + std::chrono::seconds(5));
     Require(!bounded_monitor.Evaluate(start + std::chrono::seconds(5)).bounded_time_sync_warning,
             "loss, conflict, unknown time alarm or error/fatal is never advisory");

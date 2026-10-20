@@ -161,6 +161,9 @@ class Monitor {
         const uint8_t level = static_cast<uint8_t>(code & 0xFF);
         fatal = fatal || level == 4;
         const int category = Category(id);
+        // An unrecognized native alarm cannot authorize a reduced stop policy,
+        // even if another entry is the allowlisted timing warning.
+        incompatible_sync_alarm |= category < 0;
         if (category == 1) {
           // Only an accuracy warning may be advisory. Never downgrade
           // synchronization loss, clock conflict, unknown codes, errors/fatal.
