@@ -31,6 +31,7 @@ DriverNode& DriverNode::GetNode() noexcept {
   return *this;
 }
 
+// [livox-node-exit-order]
 DriverNode::~DriverNode() {
   diagnostic_timer_.reset();
   diagnostic_query_timer_.reset();
@@ -42,6 +43,7 @@ DriverNode::~DriverNode() {
   pointclouddata_poll_thread_->join();
   imudata_poll_thread_->join();
 }
+// [livox-node-exit-order]
 
 } // namespace livox_ros
 

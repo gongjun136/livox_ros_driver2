@@ -6,6 +6,28 @@
 
 这是主机授时启动顺序修复，不是点云解码修改。ROS package 构建/安装只交付工具，不自动改 systemd 或重启传感器。异常已经传入设备时，仅修复主机时间不能保证恢复，仍须在维护窗口软重启雷达并实测数据。
 
+# 一次 Chrony 正常就会放行 PTP 吗？ {#livox_ptp_gate_reading}
+
+先看一次查询怎样判为有效：
+
+@snippet{lineno} sany_ptp_guard.py livox-ptp-quality
+
+这里检查参考源、时间新鲜度、剩余修正、offset、skew 与组合误差预算；它们是启动准入条件。外层还要求连续稳定时间：
+
+@snippet{lineno} sany_ptp_guard.py livox-ptp-stability
+
+<b>例子：</b>连续四秒满足 tracking 门限后，实时时钟相对单调时钟跳了 20 ms，该次 `good` 被置为假，`stable_since` 清空；后续需要重新连续满足默认五秒。一次查询通过或 Chrony 服务为 active 都不足以放行。实际等待还受轮询节拍、命令耗时和总超时影响，不保证恰好五秒完成。
+
+<b>边界与停止点：</b>这是启动阶段的采样检查，不能保证运行期间永不跳时，也不能证明每台雷达与主机的时间差已合格。`--check` 只等待并报告，不改时钟；`--prepare` 的副作用要继续核对下面的顺序。完整脚本：@ref sany_ptp_guard.py "授时保护源码"。
+
+# 何时初始化 PHC，是否顺便立即修改系统时间？ {#livox_ptp_prepare_reading}
+
+@snippet{lineno} sany_ptp_guard.py livox-ptp-prepare
+
+<b>按语句读：</b>先检查该网卡对应的两个 systemd 服务 `MainPID` 均为 0，再等待时间稳定；`chronyc makestep 1 0` 修改未来自动 step 策略，第二次等待通过后才执行 `phc_ctl ... set` 初始化 PHC。第一轮等待失败时尚未执行策略修改；第二轮失败时策略已经修改，但 PHC 尚未初始化，函数没有回滚前一步。
+
+<b>边界与停止点：</b>服务 PID 检查只覆盖指定服务，不能证明不存在其它控制同一 PHC 的进程，也不构成从检查到写入之间的全局互斥。该方法依赖维护流程和 systemd 启动顺序；不能在驱动运行时把它当作通用校时命令。读到 `phc_ctl` 即可停止，实际安装步骤与回退见后文。
+
 # 启动契约
 
 1. PTP 启动前调用 `sany_ptp_guard.py --prepare ethN`。检查 Chrony 实际跟踪状态，而不只检查服务 active。

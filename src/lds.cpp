@@ -73,9 +73,11 @@ void Lds::ResetLds(uint8_t data_src) {
   }
 }
 
+// [livox-request-exit-flag]
 void Lds::RequestExit() {
   request_exit_ = true;
 }
+// [livox-request-exit-flag]
 
 bool Lds::IsAllQueueEmpty() {
   for (int i = 0; i < lidar_count_; i++) {
@@ -181,6 +183,7 @@ void Lds::PushLidarData(PointPacket* lidar_data, const uint8_t index, const uint
     printf("Lidar[%u] storage queue size: %u\n", index, queue_size);
   }
 
+  // [livox-frame-queue-capacity]
   if (!QueueIsFull(queue)) {
     QueuePushAny(queue, (uint8_t *)lidar_data, base_time);
     if (!QueueIsEmpty(queue)) {
@@ -194,6 +197,7 @@ void Lds::PushLidarData(PointPacket* lidar_data, const uint8_t index, const uint
     }
   }
 }
+  // [livox-frame-queue-capacity]
 
 void Lds::PrepareExit(void) {}
 

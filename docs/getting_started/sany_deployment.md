@@ -1,5 +1,35 @@
 @page livox_sany_deployment 主 Orin 雷达部署
 
+@anchor livox_launch_layout_reading
+# 1. 自动入口怎样决定三台或四台，VIN 又检查什么？
+
+先核对 `sany_lidar.launch.py` 中的两个不同判断：
+
+@snippet{lineno} sany_lidar.launch.py livox-launch-layout
+
+<b>按变量读</b>：`VIN` 只检查是否属于已登记集合；具体启动哪个 Launch 由 `LIDAR` 查表决定。`MASTER AND SLAVE` 选择三台的 `master_lidar.launch.py`，`MASTER` 选择复用前三台并增加后雷达的 `master_4lidar.launch.py`。缺文件、解析失败、未知 VIN 或其他 LIDAR 值会抛出异常。
+
+<b>输入例子</b>：有效 VIN 配合 `LIDAR: MASTER`，进入四雷达入口；只把 LIDAR 改成 `MASTER AND SLAVE`，进入三雷达入口。这不是根据发现了几台在线设备自动缩减拓扑。四雷达入口还把后雷达 JSON 覆盖为 `MID360s_config_rear_master.json`，使用主 Orin 的接收地址。
+
+<b>边界与停止点</b>：这些选择只决定启动哪些驱动，不自动修改定位器使用哪些雷达，也不验证设备已到包。显式 `master_lidar.launch.py` / `slave_lidar.launch.py` 不经过这段车辆文件判断。读到 `layouts[vehicle['LIDAR']]` 的 Include 即可停止；完整源码：@ref sany_lidar.launch.py "自动入口"、@ref master_lidar.launch.py "前三台"、@ref master_4lidar.launch.py "四台组合"、@ref lidar_rear.launch.py "后雷达参数"。
+
+@anchor livox_role_binding_reading
+# 2. 心跳 ID 怎样绑定诊断角色，为什么要求一个进程一台雷达？
+
+ROS 2 构造函数按固定表推导默认角色，再决定是否启用设备诊断：
+
+@snippet{lineno} livox_ros_driver2.cpp livox-diagnostic-role
+
+<b>注意数组顺序</b>：角色是 `front/rear/left/right = 0/1/2/3`，对应心跳 ID `7/12/8/9`。例如 ID 8 默认得到角色 2（left），不是角色 8。显式 `dtc.role` 可覆盖默认值，因此部署还必须核对 Launch 的 ID、角色、话题与设备 JSON 是否一致。
+
+启用诊断后，读取用户 JSON 时还有这条约束：
+
+@snippet{lineno} lds_lidar.cpp livox-role-single-device
+
+`user_configs.size()!=1` 返回失败；通过后只把这一设备的 handle 交给诊断观察器。假设某个角色进程的 JSON 列出两台设备，它不能用同一角色的诊断快照同时表示两台。
+
+<b>边界与停止点</b>：这里只有配置数量及角色范围校验，不能证明实际网卡或雷达 IP 正确。`InitLdsLidar()` 失败时节点记录错误并设置心跳 Fault，不能把 ROS 进程仍在或 topic 已出现当作初始化成功。读完角色表和单设备条件即可进入 @ref livox_packet_routes_reading "SDK 数据链路"；完整实现见 @ref livox_ros::DriverNode "DriverNode"、@ref livox_ros::LdsLidar::InitLivoxLidar() "InitLivoxLidar()"，参数字段见 @ref livox_configuration 。
+
 # 网络与拓扑
 
 旧车 master 使用前、左、右雷达；新车四台全部接入 master。自动入口读取 `/opt/conf/vehicle_config.yaml` 的 VIN 和 LIDAR，`MASTER AND SLAVE` 启动 master 三台，`MASTER` 启动四台。下表是旧车配置及 2026-10-08 `sany-03-master` 的现场核对结果；其他车辆先核对自己的网卡和 JSON。

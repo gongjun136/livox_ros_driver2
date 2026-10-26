@@ -102,15 +102,19 @@ void PubHandler::OnLivoxLidarPointCloudCallback(uint32_t handle, const uint8_t d
     return;
   }
 
+  // [livox-sync-mode-from-packet]
   if (data->time_type != kTimestampTypeNoSync) {
     is_timestamp_sync_.store(true);
   } else {
     is_timestamp_sync_.store(false);
   }
+  // [livox-sync-mode-from-packet]
 
+  // [livox-imu-branch]
   if (data->data_type == kLivoxLidarImuData) {
     if (self->imu_callback_) {
       RawImuPoint* imu = (RawImuPoint*) data->data;
+  // [livox-imu-branch]
       ImuData imu_data;
       imu_data.lidar_type = static_cast<uint8_t>(LidarProtoType::kLivoxLidarType);
       imu_data.handle = handle;
@@ -122,10 +126,12 @@ void PubHandler::OnLivoxLidarPointCloudCallback(uint32_t handle, const uint8_t d
       imu_data.acc_x = imu->acc_x;
       imu_data.acc_y = imu->acc_y;
       imu_data.acc_z = imu->acc_z;
+  // [livox-imu-direct-delivery]
       self->imu_callback_(&imu_data, self->imu_client_data_);
     }
     return;
   }
+  // [livox-imu-direct-delivery]
   RawPacket packet = {};
   packet.handle = handle;
   packet.lidar_type = LidarProtoType::kLivoxLidarType;
@@ -144,11 +150,13 @@ void PubHandler::OnLivoxLidarPointCloudCallback(uint32_t handle, const uint8_t d
                                             data->timestamp, sizeof(data->timestamp));
   uint32_t length = data->length - sizeof(LivoxLidarEthernetPacket) + 1;
   packet.raw_data.insert(packet.raw_data.end(), data->data, data->data + length);
+  // [livox-raw-packet-queue]
   {
     std::unique_lock<std::mutex> lock(self->packet_mutex_);
     self->raw_packet_queue_.push_back(packet);
   }
     self->packet_condition_.notify_one();
+  // [livox-raw-packet-queue]
 
   return;
 }
@@ -163,6 +171,7 @@ void PubHandler::PublishPointCloud() {
 
 void PubHandler::CheckTimer(uint32_t id) {
 
+  // [livox-frame-sync-gates]
   if (PubHandler::is_timestamp_sync_.load()) { // Enable time synchronization
     auto& process_handler = lidar_process_handlers_[id];
     uint64_t recent_time_ms = process_handler->GetRecentTimeStamp() / kRatioOfMsToNs;
@@ -174,6 +183,7 @@ void PubHandler::CheckTimer(uint32_t id) {
     if (diff < publish_interval_tolerance_) {
       return;
     }
+  // [livox-frame-sync-gates]
 
     frame_.base_time[frame_.lidar_num] = process_handler->GetLidarBaseTime();
     points_[id].clear();
@@ -201,10 +211,12 @@ void PubHandler::CheckTimer(uint32_t id) {
       first = false;
       return;
     }
+    // [livox-frame-host-clock]
     if (now_time - last_pub_time_ < std::chrono::nanoseconds(publish_interval_)) {
       return;
     }
     last_pub_time_ += std::chrono::nanoseconds(publish_interval_);
+    // [livox-frame-host-clock]
     for (auto &process_handler : lidar_process_handlers_) {
       frame_.base_time[frame_.lidar_num] = process_handler.second->GetLidarBaseTime();
       uint32_t handle = process_handler.first;
@@ -229,6 +241,7 @@ void PubHandler::CheckTimer(uint32_t id) {
 void PubHandler::RawDataProcess() {
   RawPacket raw_data;
   while (!is_quit_.load()) {
+    // [livox-raw-packet-consume]
     {
       std::unique_lock<std::mutex> lock(packet_mutex_);
       if (raw_packet_queue_.empty()) {
@@ -240,6 +253,7 @@ void PubHandler::RawDataProcess() {
       raw_data = raw_packet_queue_.front();
       raw_packet_queue_.pop_front();
     }
+    // [livox-raw-packet-consume]
     uint32_t id = 0;
     GetLidarId(raw_data.lidar_type, raw_data.handle, id);
     if (lidar_process_handlers_.find(id) == lidar_process_handlers_.end()) {
@@ -249,8 +263,10 @@ void PubHandler::RawDataProcess() {
     if (lidar_extrinsics_.find(id) != lidar_extrinsics_.end()) {
         lidar_process_handlers_[id]->SetLidarsExtParam(lidar_extrinsics_[id]);
     }
+    // [livox-process-then-frame]
     process_handler->PointCloudProcess(raw_data);
     CheckTimer(id);
+    // [livox-process-then-frame]
   }
 }
 
@@ -262,6 +278,7 @@ bool PubHandler::GetLidarId(LidarProtoType lidar_type, uint32_t handle, uint32_t
   return false;
 }
 
+// [livox-packet-time-source]
 uint64_t PubHandler::GetEthPacketTimestamp(uint8_t timestamp_type, uint8_t* time_stamp, uint8_t size) {
   LdsStamp time;
   memcpy(time.stamp_bytes, time_stamp, size);
@@ -273,6 +290,7 @@ uint64_t PubHandler::GetEthPacketTimestamp(uint8_t timestamp_type, uint8_t* time
 
   return std::chrono::high_resolution_clock::now().time_since_epoch().count();
 }
+// [livox-packet-time-source]
 
 /*******************************/
 /*  LidarPubHandler Definitions*/
@@ -385,9 +403,11 @@ void LidarPubHandler::ProcessCartesianHighPoint(RawPacket & pkt) {
     point.intensity = raw[i].reflectivity;
     point.line = i % pkt.line_num;
     point.tag = raw[i].tag;
+    // [livox-point-time-construction]
     point.offset_time = pkt.time_stamp + i * pkt.point_interval;
     std::lock_guard<std::mutex> lock(mutex_);
     points_clouds_.push_back(point);
+    // [livox-point-time-construction]
   }
 }
 

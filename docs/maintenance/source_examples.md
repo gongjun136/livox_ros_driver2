@@ -1,5 +1,13 @@
 @page livox_source_examples Launch、配置与录包脚本源码
 
+@ref sany_lidar.launch.py "车辆配置到三/四雷达的自动选择"
+
+@ref master_4lidar.launch.py "主机四雷达组合"
+
+@ref lidar_rear.launch.py "后雷达参数与 JSON 路径覆盖"
+
+@ref MID360s_config_rear_master.json "后雷达接入主机的 JSON"
+
 @ref master_lidar.launch.py "主机三雷达 Launch"
 
 @ref lidar_front.launch.py "前雷达参数"

@@ -15,6 +15,7 @@ def launch_for_vehicle(context):
         vehicle = yaml.safe_load(path.read_text(encoding='utf-8'))
         if not isinstance(vehicle, dict):
             raise ValueError('expected a YAML mapping')
+        # [livox-launch-layout]
         vin = vehicle.get('VIN')
         if vin not in ('SANLV77EXSH000858', 'SANLU77E8TH000006'):
             raise ValueError(f'unknown VIN: {vin!r}')
@@ -22,6 +23,7 @@ def launch_for_vehicle(context):
                    'MASTER': 'master_4lidar.launch.py'}
         if vehicle.get('LIDAR') not in layouts:
             raise ValueError("LIDAR must be 'MASTER AND SLAVE' or 'MASTER'")
+        # [livox-launch-layout]
     except (OSError, ValueError, TypeError, yaml.YAMLError) as error:
         raise RuntimeError(f'SANY vehicle configuration rejected ({path}): {error}') from error
     package = Path(get_package_share_directory('livox_ros_driver2_core'))

@@ -48,6 +48,7 @@ refresh_active_lidars() {
   local index
   local ip
 
+  # [livox-record-topic-pair]
   topic_list="$(ros2 topic list)"
   active_indices=()
   for index in "${!lidar_ips[@]}"; do
@@ -57,6 +58,7 @@ refresh_active_lidars() {
       active_indices+=("${index}")
     fi
   done
+  # [livox-record-topic-pair]
 }
 
 echo "Waiting up to 30 seconds for Livox topic pairs..."
@@ -74,11 +76,13 @@ while ((SECONDS < deadline)); do
   sleep 1
 done
 
+# [livox-record-partial-ready]
 refresh_active_lidars
 if ((${#active_indices[@]} == 0)); then
   echo "No complete Livox LiDAR+IMU topic pair appeared within 30 seconds." >&2
   exit 1
 fi
+# [livox-record-partial-ready]
 
 echo "Recording the following ${#active_indices[@]} LiDAR(s):"
 for index in "${active_indices[@]}"; do
@@ -115,6 +119,7 @@ stop_recorders() {
   stopped=true
   trap - INT TERM EXIT
 
+  # [livox-record-stop-wait]
   echo "Stopping recorders and flushing MCAP buffers..."
   for pid in "${pids[@]}"; do
     kill -INT "${pid}" 2>/dev/null || true
@@ -123,6 +128,7 @@ stop_recorders() {
     wait "${pid}" 2>/dev/null || true
   done
   echo "Recording saved under ${output_root}"
+  # [livox-record-stop-wait]
 }
 
 trap request_stop INT TERM
@@ -178,11 +184,13 @@ for input_bag in "${input_bags[@]}"; do
 done
 
 echo "Merging ${#input_bags[@]} bag(s) into ${merged_output}..."
+# [livox-record-merge-failure]
 if ! ros2 bag convert \
   "${convert_inputs[@]}" \
   --output-options "${merge_options}"; then
   echo "Merge failed; the original bags are still intact under ${output_root}." >&2
   exit 1
 fi
+# [livox-record-merge-failure]
 
 echo "Merged indexed MCAP saved to ${merged_output}"

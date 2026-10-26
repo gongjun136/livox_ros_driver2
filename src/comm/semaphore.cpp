@@ -32,10 +32,12 @@ void Semaphore::Signal() {
   cv_.notify_one();
 }
 
+// [livox-semaphore-predicate]
 void Semaphore::Wait() {
   std::unique_lock<std::mutex> lock(mutex_);
   cv_.wait(lock, [=] { return count_ > 0; });
   --count_;
 }
+// [livox-semaphore-predicate]
 
 } // namespace livox_ros

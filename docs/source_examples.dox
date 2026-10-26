@@ -1,4 +1,20 @@
 /**
+ * @example{lineno} sany_lidar.launch.py
+ * 自动角色选择见 @ref livox_launch_layout_reading 。
+ */
+/**
+ * @example{lineno} master_4lidar.launch.py
+ * 主机四雷达组合见 @ref livox_sany_deployment 。
+ */
+/**
+ * @example{lineno} lidar_rear.launch.py
+ * 后雷达参数覆盖见 @ref livox_sany_deployment 。
+ */
+/**
+ * @example{lineno} MID360s_config_rear_master.json
+ * 主机接入后雷达时使用的网络配置。
+ */
+/**
  * @example{lineno} master_lidar.launch.py
  * 用途与阅读入口见 @ref livox_source_examples 。
  */

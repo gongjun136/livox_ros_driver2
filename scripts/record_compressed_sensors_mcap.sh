@@ -2,8 +2,10 @@
 
 set -euo pipefail
 
+# [livox-record-compat-entry]
 echo "WARNING: this compatibility entry point is deprecated." >&2
 echo "Use /home/nvidia/project/gj_ws/sdk/scripts/record_compressed_sensors_mcap.sh." >&2
+# [livox-record-compat-entry]
 
 duration_seconds="${1:-600}"
 timestamp="$(date +%Y_%m_%d-%H_%M_%S)"
@@ -63,11 +65,13 @@ cleanup() {
   local status=$?
   trap - INT TERM EXIT
 
+  # [livox-record-recorder-cleanup]
   if [[ -n "${recorder_pid}" ]] && kill -0 "${recorder_pid}" 2>/dev/null; then
     echo "Stopping recorder and flushing MCAP..."
     kill -INT "${recorder_pid}" 2>/dev/null || true
     wait "${recorder_pid}" 2>/dev/null || true
   fi
+  # [livox-record-recorder-cleanup]
   if [[ -n "${lidar_compressor_pid}" ]] && kill -0 "${lidar_compressor_pid}" 2>/dev/null; then
     kill -INT "${lidar_compressor_pid}" 2>/dev/null || true
     wait "${lidar_compressor_pid}" 2>/dev/null || true
@@ -82,11 +86,13 @@ cleanup() {
 trap request_stop INT TERM
 trap cleanup EXIT
 
+# [livox-record-compressor-start]
 echo "Expecting camera topics from: ./rb_camera.sh ros2_h265"
 echo "Starting LiDAR Zstd compressor from livox_ros_driver2_core..."
 ros2 run livox_ros_driver2_core pointcloud_zstd_compressor --ros-args \
   -p compression_level:="${zstd_level}" &
 lidar_compressor_pid=$!
+# [livox-record-compressor-start]
 
 echo "Waiting up to 45 seconds for ${#required_topics[@]} compressed topics..."
 deadline=$((SECONDS + 45))

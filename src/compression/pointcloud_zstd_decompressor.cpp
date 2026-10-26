@@ -71,6 +71,7 @@ private:
     const rclcpp::Publisher<PointCloud2>::SharedPtr & publisher,
     const std::string & topic)
   {
+    // [livox-zstd-format-limit]
     if (input->compression_format != "zstd") {
       RCLCPP_ERROR_THROTTLE(
         get_logger(), *get_clock(), 5000,
@@ -87,6 +88,7 @@ private:
     }
 
     PointCloud2 output;
+    // [livox-zstd-format-limit]
     output.header = input->header;
     output.height = input->height;
     output.width = input->width;
@@ -97,6 +99,7 @@ private:
     output.is_dense = input->is_dense;
     output.data.resize(static_cast<std::size_t>(input->uncompressed_size));
 
+    // [livox-zstd-decode-size]
     const std::size_t result = ZSTD_decompress(
       output.data.data(), output.data.size(), input->data.data(), input->data.size());
     if (ZSTD_isError(result)) {
@@ -114,6 +117,7 @@ private:
     }
 
     publisher->publish(std::move(output));
+    // [livox-zstd-decode-size]
   }
 
   std::vector<rclcpp::Subscription<CompressedPointCloud2>::SharedPtr> subscriptions_;

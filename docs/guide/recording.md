@@ -5,3 +5,5 @@
 - @subpage livox_recording "录包脚本与工作流选择"
 - @subpage livox_pointcloud_zstd "PointCloud2 无损压缩与解压"
 - @subpage livox_compressed_recording "六相机四雷达压缩录制"
+
+先核对 @ref livox_zstd_lossless_reading "序列化与无损压缩边界"、@ref livox_zstd_decode_reading "解码校验"，再读 @ref livox_record_discovery_reading "topic 发现" 和 @ref livox_record_completion_reading "录制退出"。多传感器流程的进程顺序与收尾见 @ref livox_compressed_entry_reading 和 @ref livox_compressed_flush_reading 。

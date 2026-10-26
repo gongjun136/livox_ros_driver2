@@ -23,6 +23,7 @@ inline void PublishDiagnosticSnapshot(functional_safety::HeartbeatPublisher& hea
   message.bounded_time_sync_warning = state.bounded_time_sync_warning;
   message.time_sync_offset_ns = state.time_sync_offset_ns;
   message.time_sync_evidence_age_us = state.time_sync_evidence_age_us;
+  // [livox-diagnostic-current-vs-history]
   std::vector<uint32_t> failed, passed;
   for (size_t i = 0; i < kCategories; ++i) {
     diagnostic_monitor_interfaces::msg::DtcObservation observation;
@@ -37,6 +38,7 @@ inline void PublishDiagnosticSnapshot(functional_safety::HeartbeatPublisher& hea
   }
   heartbeat.UpdateFaults(failed, passed);
   publisher.publish(message);
+  // [livox-diagnostic-current-vs-history]
 }
 }  // namespace dtc
 }  // namespace livox_ros

@@ -157,6 +157,7 @@ install(TARGETS
 option(BUILD_DOCS "Build the Doxygen deployment and developer manual" OFF)
 if(BUILD_DOCS)
   find_package(Doxygen REQUIRED COMPONENTS dot)
+  find_package(Python3 3.9 REQUIRED COMPONENTS Interpreter)
   set(LIVOX_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
   set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/docs")
   configure_file(
@@ -164,10 +165,15 @@ if(BUILD_DOCS)
     "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile"
     @ONLY)
   add_custom_target(docs ALL
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/docs/maintenance/check_links.py"
     COMMAND "${DOXYGEN_EXECUTABLE}" "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile"
     COMMAND "${CMAKE_COMMAND}"
             "-DWARN_LOG=${CMAKE_CURRENT_BINARY_DIR}/doxygen-warnings.log"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/docs/check_warnings.cmake"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/docs/maintenance/prepare_html.py"
+            --html "${DOXYGEN_OUTPUT_DIRECTORY}/html"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/docs/maintenance/check_links.py"
+            --html "${DOXYGEN_OUTPUT_DIRECTORY}/html"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     COMMENT "Generating Livox driver deployment and developer manual"
     VERBATIM)

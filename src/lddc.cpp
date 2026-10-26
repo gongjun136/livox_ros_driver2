@@ -120,12 +120,14 @@ void Lddc::DistributePointCloudData(void) {
     std::cout << "lds is not registered" << std::endl;
     return;
   }
+  // [livox-distribute-blocking-wait]
   if (lds_->IsRequestExit()) {
     std::cout << "DistributePointCloudData is RequestExit" << std::endl;
     return;
   }
   
   lds_->pcd_semaphore_.Wait();
+  // [livox-distribute-blocking-wait]
   for (uint32_t i = 0; i < lds_->lidar_count_; i++) {
     uint32_t lidar_id = i;
     LidarDevice *lidar = &lds_->lidars_[lidar_id];
@@ -198,6 +200,7 @@ void Lddc::PrepareExit(void) {
   }
 }
 
+// [livox-frame-to-message]
 void Lddc::PublishPointcloud2(LidarDataQueue *queue, uint8_t index) {
   while(!QueueIsEmpty(queue)) {
     StoragePacket pkg;
@@ -213,6 +216,7 @@ void Lddc::PublishPointcloud2(LidarDataQueue *queue, uint8_t index) {
     PublishPointcloud2Data(index, timestamp, cloud);
   }
 }
+// [livox-frame-to-message]
 
 void Lddc::PublishCustomPointcloud(LidarDataQueue *queue, uint8_t index) {
   while(!QueueIsEmpty(queue)) {
@@ -303,6 +307,7 @@ void Lddc::InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint
   cloud.width = pkg.points_num;
   cloud.row_step = cloud.width * cloud.point_step;
 
+  // [livox-message-header-time]
   cloud.is_bigendian = false;
   cloud.is_dense     = true;
 
@@ -315,6 +320,7 @@ void Lddc::InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint
   #elif defined BUILDING_ROS2
       cloud.header.stamp = rclcpp::Time(timestamp);
   #endif
+  // [livox-message-header-time]
 
   std::vector<LivoxPointXyzrtlt> points;
   for (size_t i = 0; i < pkg.points_num; ++i) {
@@ -325,7 +331,9 @@ void Lddc::InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint
     point.reflectivity = pkg.points[i].intensity;
     point.tag = pkg.points[i].tag;
     point.line = pkg.points[i].line;
+    // [livox-pointcloud-point-time]
     point.timestamp = static_cast<double>(pkg.points[i].offset_time);
+    // [livox-pointcloud-point-time]
     points.push_back(std::move(point));
   }
   cloud.data.resize(pkg.points_num * sizeof(LivoxPointXyzrtlt));
@@ -340,9 +348,11 @@ void Lddc::PublishPointcloud2Data(const uint8_t index, const uint64_t timestamp,
     std::dynamic_pointer_cast<Publisher<PointCloud2>>(GetCurrentPublisher(index));
 #endif
 
+  // [livox-pointcloud-publish-progress]
   if (kOutputToRos == output_type_) {
     publisher_ptr->publish(cloud);
     if (pointcloud_published_callback_) pointcloud_published_callback_();
+  // [livox-pointcloud-publish-progress]
   } else {
 #ifdef BUILDING_ROS1
     if (bag_ && enable_lidar_bag_) {

@@ -9,9 +9,51 @@ import re
 from urllib.parse import unquote, urlsplit
 
 
-def check_sources(root):
+SNIPPET = re.compile(r'^\s*(?:\*\s*)?@snippet(?:\{[^}]*\})?\s+(\S+)\s+(\S+)', re.M)
+
+
+def check_snippets(root):
+    """Reject missing, ambiguous, empty or unpaired real-source excerpts."""
     errors = []
-    pages = sorted((root / 'docs').rglob('*.md'))
+    example_roots = [root / name for name in ('scripts', 'src', 'launch_ROS2', 'config')]
+    examples = [p for base in example_roots for p in base.rglob('*')
+                if p.suffix in {'.sh', '.py', '.cc', '.cpp', '.h', '.hpp'} and p.is_file()]
+    consumers = [p for base in [root / 'docs', root / 'src'] for p in base.rglob('*')
+                 if p.suffix in {'.md', '.dox', '.cc', '.cpp', '.h', '.hpp'} and p.is_file()]
+    for consumer in consumers:
+        text = consumer.read_text(encoding='utf-8')
+        # Documentation examples are not live snippet directives.
+        text = re.sub(r'```.*?```', '', text, flags=re.S)
+        for name, marker in SNIPPET.findall(text):
+            matches = [p for p in examples if any(
+                p.is_relative_to(base) and p.relative_to(base).as_posix() == name
+                for base in example_roots) or ('/' not in name and p.name == name)]
+            label = f'{consumer.relative_to(root)}: snippet {name} [{marker}]'
+            if len(matches) != 1:
+                errors.append(f'{label}: expected one source file, found {len(matches)}')
+                continue
+            source = matches[0].read_text(encoding='utf-8')
+            boundaries = list(re.finditer(
+                r'^\s*(?://|#)\s*\[' + re.escape(marker) + r'\]\s*$', source, re.M))
+            if len(boundaries) != 2:
+                errors.append(f'{label}: expected two marker comments, found {len(boundaries)}')
+            elif not source[boundaries[0].end():boundaries[1].start()].strip():
+                errors.append(f'{label}: empty excerpt')
+    return errors
+
+
+PAGE = re.compile(r'^\s*(?:\*\s*)?@page\s+(\w+)[ \t]*(.*)$', re.M)
+
+
+def manual_pages(root):
+    return sorted([*(root / 'docs').rglob('*.md'),
+                   *(p for p in (root / 'docs').rglob('*.dox')
+                     if PAGE.search(p.read_text(encoding='utf-8')))])
+
+
+def check_sources(root):
+    errors = check_snippets(root)
+    pages = manual_pages(root)
     ids = []
     references = []
     navigation = {}
@@ -19,7 +61,7 @@ def check_sources(root):
     index = root / 'docs/index.md'
     for page in pages:
         text = page.read_text(encoding='utf-8')
-        page_ids = re.findall(r'^@page\s+(\w+)', text, re.M)
+        page_ids = [name for name, _ in PAGE.findall(text)]
         ids.extend(page_ids)
         if page.parent == root / 'docs/guide':
             guide_ids.update(page_ids)
@@ -198,12 +240,12 @@ def main():
     errors, count = check_sources(root)
     if args.html:
         ids = []
-        for page in (root/'docs').rglob('*.md'):
-            ids.extend(re.findall(r'^@page\s+(\w+)',page.read_text(encoding='utf-8'),re.M))
+        for page in manual_pages(root):
+            ids.extend(name for name, _ in PAGE.findall(page.read_text(encoding='utf-8')))
         parents = {}
-        for page in (root/'docs').rglob('*.md'):
+        for page in manual_pages(root):
             content = page.read_text(encoding='utf-8')
-            match = re.search(r'^@page\s+(\w+)', content, re.M)
+            match = PAGE.search(content)
             parent = 'index' if page.name == 'index.md' else (match[1] if match else None)
             prose = re.sub(r'```.*?```|`[^`\n]*`', '', content, flags=re.S)
             for child in re.findall(r'@subpage\s+(\w+)', prose):

@@ -96,6 +96,7 @@ private:
     const std::shared_ptr<StreamStats> & stats)
   {
     CompressedPointCloud2 output;
+    // [livox-zstd-layout]
     output.header = input->header;
     output.height = input->height;
     output.width = input->width;
@@ -106,8 +107,10 @@ private:
     output.is_dense = input->is_dense;
     output.compression_format = "zstd";
     output.uncompressed_size = input->data.size();
+    // [livox-zstd-layout]
     output.data.resize(ZSTD_compressBound(input->data.size()));
 
+    // [livox-zstd-compress]
     const std::size_t compressed_size = ZSTD_compress(
       output.data.data(), output.data.size(), input->data.data(), input->data.size(),
       compression_level_);
@@ -124,6 +127,7 @@ private:
     stats->input_bytes += input->data.size();
     stats->output_bytes += compressed_size;
     publisher->publish(std::move(output));
+    // [livox-zstd-compress]
   }
 
   void log_stats() const

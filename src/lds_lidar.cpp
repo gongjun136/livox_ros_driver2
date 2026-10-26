@@ -137,6 +137,7 @@ bool LdsLidar::InitLivoxLidar() {
   if (!parser.Parse(user_configs)) {
     std::cout << "failed to parse user-defined config" << std::endl;
   }
+  // [livox-role-single-device]
   if (diagnostic_monitor_) {
     if (user_configs.size() != 1) {
       std::cerr << "Role-specific DTC monitoring requires exactly one configured LiDAR" << std::endl;
@@ -144,6 +145,7 @@ bool LdsLidar::InitLivoxLidar() {
     }
     diagnostic_handle_ = user_configs.front().handle;
   }
+  // [livox-role-single-device]
 
   // SDK initialization
   if (!LivoxLidarSdkInit(path_.c_str())) {
@@ -194,6 +196,7 @@ bool LdsLidar::InitLivoxLidar() {
   return true;
 }
 
+// [livox-register-data-callbacks]
 void LdsLidar::SetLidarPubHandle() {
   pub_handler().SetPointCloudsCallback(LidarCommonCallback::OnLidarPointClounCb, g_lds_ldiar);
   pub_handler().SetImuDataCallback(LidarCommonCallback::LidarImuDataCallback, g_lds_ldiar);
@@ -201,6 +204,7 @@ void LdsLidar::SetLidarPubHandle() {
   double publish_freq = Lds::GetLdsFrequency();
   pub_handler().SetPointCloudConfig(publish_freq);
 }
+// [livox-register-data-callbacks]
 
 bool LdsLidar::LivoxLidarStart() {
   return true;

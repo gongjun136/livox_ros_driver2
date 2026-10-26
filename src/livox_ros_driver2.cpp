@@ -199,6 +199,7 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
     DRIVER_WARN(*this, "Functional safety heartbeat is disabled for node %s", get_name());
   }
 
+  // [livox-diagnostic-role]
   const std::array<int, 4> role_ids{{7, 12, 8, 9}};
   const std::array<std::string, 4> role_names{{"front", "rear", "left", "right"}};
   int default_role = -1;
@@ -208,6 +209,7 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   if (dtc_enabled) {
     if (!heartbeat_ || role < 0 || role >= 4) throw std::invalid_argument("DTC role requires a registered heartbeat and role [0,3]");
     dtc::MonitorConfig monitor_config;
+  // [livox-diagnostic-role]
     const int data_ms = declare_parameter<int>("dtc.data_timeout_ms", 500);
     const int state_ms = declare_parameter<int>("dtc.state_timeout_ms", 2500);
     const int grace_ms = declare_parameter<int>("dtc.startup_grace_ms", 8000);
@@ -244,11 +246,13 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   /** Lidar data distribute control and lidar data source set */
   lddc_ptr_ = std::make_unique<Lddc>(xfer_format, multi_topic, data_src, output_type, publish_freq, frame_id);
   lddc_ptr_->SetRosNode(this);
+  // [livox-heartbeat-work-callback]
   lddc_ptr_->SetPointcloudPublishedCallback([this]() {
     if (!heartbeat_) return;
     heartbeat_->RecordWork();
     heartbeat_->SetState(functional_safety::NodeState::kRunning);
   });
+  // [livox-heartbeat-work-callback]
 
   if (data_src == kSourceRawLidar) {
     DRIVER_INFO(*this, "Data Source is raw lidar.");
@@ -296,6 +300,7 @@ RCLCPP_COMPONENTS_REGISTER_NODE(livox_ros::DriverNode)
 #endif  // defined BUILDING_ROS2
 
 
+// [livox-publish-thread-stop]
 void DriverNode::PointCloudDataPollThread()
 {
   std::future_status status;
@@ -305,6 +310,7 @@ void DriverNode::PointCloudDataPollThread()
     status = future_.wait_for(std::chrono::microseconds(0));
   } while (status == std::future_status::timeout);
 }
+// [livox-publish-thread-stop]
 
 void DriverNode::ImuDataPollThread()
 {

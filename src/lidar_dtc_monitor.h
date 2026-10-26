@@ -112,6 +112,7 @@ class Monitor {
     bounded_last_sync_ = last_sync;
     bounded_sample_time_ = now;
     bounded_offset_ = offset;
+    // [livox-ptp-evidence-advance]
     const auto ttl_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(config_.state_timeout).count();
     const bool healthy = type == 1 && last_sync != 0 && local_time >= last_sync &&
         local_time - last_sync <= static_cast<uint64_t>(ttl_ns) &&
@@ -126,12 +127,14 @@ class Monitor {
       sync_time_ = now;
       sync_seen_ = ptp_verified_ = true;
     }
+    // [livox-ptp-evidence-advance]
   }
   void ObservePacket(Clock::time_point now = Clock::now()) {
     std::lock_guard<std::mutex> lock(mutex_);
     packet_time_ = now;
     packet_seen_ = true;
   }
+  // [livox-diagnostic-cloud-progress]
   void ObserveCloud(uint64_t stamp, size_t valid_points, Clock::time_point now = Clock::now()) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (stamp > valid_stamp_ && valid_points >= config_.min_valid_points) {
@@ -140,6 +143,7 @@ class Monitor {
       valid_seen_ = true;
     }
   }
+  // [livox-diagnostic-cloud-progress]
   Snapshot Evaluate(Clock::time_point now = Clock::now()) const {
     std::lock_guard<std::mutex> lock(mutex_);
     Snapshot result;
@@ -176,6 +180,7 @@ class Monitor {
         if (category >= 0) result.conditions[category] = kFail;
       }
     }
+    // [livox-diagnostic-usability]
     const bool state_fresh = state_seen_ && now - state_time_ <= config_.state_timeout;
     const bool valid_fresh = valid_seen_ && now - valid_time_ <= config_.data_timeout;
     const bool packet_fresh = packet_seen_ && now - packet_time_ <= config_.data_timeout;
@@ -188,6 +193,8 @@ class Monitor {
     } else if (state_fresh && work_state_ != 1 && now - start_ >= config_.startup_grace) {
       result.usability = kUnusable;
     }
+
+    // [livox-diagnostic-usability]
     result.bounded_time_sync_warning = hms_fresh && bounded_warning && !incompatible_sync_alarm &&
         result.usability == kUsable && bounded_advances_ >= 2 &&
         result.time_sync_evidence_age_us <= 2500000 &&

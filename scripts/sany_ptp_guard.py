@@ -24,12 +24,14 @@ def tracking_ok(text, now):
         if not all(math.isfinite(v) for v in values):
             return False
         ref, correction, offset, skew, delay, dispersion = values
+        # [livox-ptp-quality]
         return (now >= 1735689600 and row[0] not in ('00000000', '7F7F0101')
                 and 1 <= int(row[2]) < 16 and row[13] == 'Normal'
                 and 0 <= now - ref <= 180
                 and abs(correction) <= .01 and abs(offset) <= .01
                 and 0 <= skew <= 100 and delay >= 0 and dispersion >= 0
                 and abs(correction) + delay / 2 + dispersion <= .1)
+        # [livox-ptp-quality]
     except (ValueError, IndexError, StopIteration):
         return False
 
@@ -46,6 +48,7 @@ def wait_ready(timeout, stable_seconds=5, command=run,
         except (OSError, subprocess.SubprocessError):
             good = False
         # A step in either direction resets the stability window.
+        # [livox-ptp-stability]
         if previous and abs((now - previous[0]) - (mono - previous[1])) > .01:
             good = False
         previous = now, mono
@@ -56,6 +59,7 @@ def wait_ready(timeout, stable_seconds=5, command=run,
                 return
         else:
             stable_since = None
+        # [livox-ptp-stability]
         sleep(1)
     raise RuntimeError('No fresh, stable Chrony time; PTP startup refused')
 
@@ -64,6 +68,7 @@ def prepare(interface, timeout, command=run, waiter=wait_ready):
     if not re.fullmatch(r'eth[0-9]+', interface):
         raise ValueError('Expected an ethN interface')
     # Never step a PHC that is already being served or controlled.
+    # [livox-ptp-prepare]
     for unit in (f'ptp_master_{interface}.service', f'ptp_master_{interface}_sys.service'):
         if command('systemctl', 'show', unit, '-p', 'MainPID', '--value') != '0':
             raise RuntimeError(f'{unit} is running; refusing PHC initialization')
@@ -72,6 +77,7 @@ def prepare(interface, timeout, command=run, waiter=wait_ready):
     command('chronyc', 'makestep', '1', '0')
     waiter(15)
     command('phc_ctl', interface, 'set')
+    # [livox-ptp-prepare]
     print(f'{interface}: fresh Chrony time, automatic steps disabled, PHC initialized', flush=True)
 
 
