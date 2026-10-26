@@ -1,6 +1,5 @@
 import importlib.util
 from pathlib import Path
-from types import SimpleNamespace as NS
 import unittest
 
 path = Path(__file__).resolve().parents[1] / 'scripts' / 'collect_lidar_identity.py'
@@ -13,9 +12,9 @@ class InventoryTest(unittest.TestCase):
     def message(self, **changes):
         values = dict(role='front', ip='192.168.3.184', serial_number='TEST_SN',
                       device_type=9, identity_valid=True,
-                      header=NS(stamp=NS(sec=100, nanosec=20), frame_id='livox_frame'))
+                      confirmed_at_ns=100000000020, frame_id='livox_frame')
         values.update(changes)
-        return NS(**values)
+        return values
 
     def test_partial_and_conflicting_inventory(self):
         record = module.identity_record('front', self.message())
@@ -31,7 +30,7 @@ class InventoryTest(unittest.TestCase):
 
     def test_invalid_identity_and_wrong_role(self):
         for msg in (self.message(identity_valid=False), self.message(serial_number=''),
-                    self.message(header=NS(stamp=NS(sec=0, nanosec=0), frame_id=''))):
+                    self.message(confirmed_at_ns=0)):
             record = module.identity_record('front', msg)
             self.assertFalse(record['identity_valid'])
             self.assertIsNone(record['serial_number'])

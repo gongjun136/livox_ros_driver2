@@ -1,7 +1,7 @@
 @page livox_sany_deployment 主 Orin 雷达部署
 
-升级后的角色驱动自动发布 SDK 设备 SN。设备信息话题、缓存语义和一键导出见
-@ref livox_configuration "雷达 SN 与设备身份"。须配套更新 common_msgs 的接口后重编驱动；
+升级后的角色驱动将 SDK 设备 SN 暴露为 ROS 2 参数。参数语义和按需导出见
+@ref livox_configuration "雷达 SN 与设备身份"。旧设备身份消息已移除，升级时使用干净的构建/安装目录；
 实机 SN 与原数据链路应在驱动重启后的维护窗口核验。
 
 @anchor livox_launch_layout_reading

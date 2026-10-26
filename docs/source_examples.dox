@@ -1,6 +1,6 @@
 /**
  * @example{lineno} collect_lidar_identity.py
- * 身份语义、QoS 和导出命令见 @ref livox_configuration 。
+ * 身份参数、查询服务和导出命令见 @ref livox_configuration 。
  */
 /**
  * @example{lineno} sany_lidar.launch.py

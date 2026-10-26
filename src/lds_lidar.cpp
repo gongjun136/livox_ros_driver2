@@ -147,12 +147,12 @@ bool LdsLidar::InitLivoxLidar() {
   }
   // [livox-role-single-device]
 
-  if (identity_publisher_) {
+  if (identity_parameters_) {
     if (user_configs.size() != 1) {
       std::cerr << "Device identity requires exactly one configured LiDAR per role" << std::endl;
       return false;
     }
-    identity_publisher_->Configure(user_configs.front().handle, IpNumToString(user_configs.front().handle));
+    identity_parameters_->Configure(user_configs.front().handle, IpNumToString(user_configs.front().handle));
   }
 
   // SDK initialization
@@ -230,7 +230,7 @@ int LdsLidar::DeInitLdsLidar(void) {
       SetLivoxLidarInfoCallback(nullptr, nullptr);
     }
     LivoxLidarSdkUninit();
-    identity_publisher_.reset();
+    identity_parameters_.reset();
     printf("Livox Lidar SDK Deinit completely!\n");
   }
 

@@ -270,9 +270,9 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
         default_role >= 0 ? role_names[default_role] : "");
     const bool identity_enabled = declare_parameter<bool>("device_info.enabled", !identity_role.empty());
     if (identity_enabled) {
-      read_lidar->SetIdentityPublisher(std::make_shared<identity::Publisher>(*this, identity_role, frame_id));
+      read_lidar->SetIdentityParameters(std::make_shared<identity::Parameters>(*this, identity_role, frame_id));
     } else {
-      read_lidar->SetIdentityPublisher(nullptr);
+      read_lidar->SetIdentityParameters(nullptr);
     }
     lddc_ptr_->RegisterLds(static_cast<Lds *>(read_lidar));
 

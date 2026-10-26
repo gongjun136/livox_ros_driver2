@@ -56,9 +56,9 @@ class LdsLidar final : public Lds {
   void SetDiagnosticMonitor(std::shared_ptr<dtc::Monitor> monitor) { diagnostic_monitor_ = std::move(monitor); }
   void ObserveDiagnosticCloud(PointFrame* frame);
   void QueryDiagnosticStatus();
-  void SetIdentityPublisher(std::shared_ptr<identity::Publisher> publisher) { identity_publisher_ = std::move(publisher); }
+  void SetIdentityParameters(std::shared_ptr<identity::Parameters> parameters) { identity_parameters_ = std::move(parameters); }
   void ObserveIdentity(uint32_t handle, const LivoxLidarInfo* info) {
-    if (identity_publisher_) identity_publisher_->Observe(handle, info);
+    if (identity_parameters_) identity_parameters_->Observe(handle, info);
   }
 
   int DeInitLdsLidar(void);
@@ -101,7 +101,7 @@ class LdsLidar final : public Lds {
   uint32_t whitelist_count_;
   volatile bool is_initialized_;
   std::shared_ptr<dtc::Monitor> diagnostic_monitor_;
-  std::shared_ptr<identity::Publisher> identity_publisher_;
+  std::shared_ptr<identity::Parameters> identity_parameters_;
   uint32_t diagnostic_handle_ = 0;
   std::atomic_bool diagnostic_query_pending_{false};
   uint16_t diagnostic_observer_id_ = 0;

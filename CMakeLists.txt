@@ -188,10 +188,11 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_collect_lidar_identity.py)
   add_executable(lidar_identity_test test/lidar_identity_test.cpp)
   target_include_directories(lidar_identity_test PRIVATE src ${LIVOX_LIDAR_SDK_INCLUDE_DIR})
-  ament_target_dependencies(lidar_identity_test rclcpp livox_ros_driver2)
+  ament_target_dependencies(lidar_identity_test rclcpp)
   add_test(NAME lidar_identity_test COMMAND lidar_identity_test)
   add_test(NAME identity_collector_ros_test
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_identity_collector_ros.py)
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_identity_collector_ros.py
+      --fixture $<TARGET_FILE:lidar_identity_test>)
   set_tests_properties(lidar_identity_test identity_collector_ros_test PROPERTIES
     TIMEOUT 60 RUN_SERIAL TRUE ENVIRONMENT "ROS_DOMAIN_ID=179;ROS_LOCALHOST_ONLY=1")
   # Cross-process discovery on WSL loopback is tested with CycloneDDS; production
