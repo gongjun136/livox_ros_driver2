@@ -1,5 +1,56 @@
 @page livox_configuration 网络、Launch 参数与消息契约
 
+# 雷达 SN 与设备身份
+
+SANY 单雷达入口按现有心跳 ID 自动选择 front/rear/left/right，默认启用设备身份发布。
+自定义入口可设置 `device_info.role`（front/rear/left/right）和 `device_info.enabled`；
+无已知角色的通用入口默认关闭。身份发布要求 JSON 恰好配置一台雷达，绑定该配置的 handle/IP，
+不会把自动发现的其他雷达登记到此角色。无需额外网络查询或修改雷达配置。
+
+话题为 `/sensors/livox/<role>/device_info`，类型为 `livox_ros_driver2/msg/LidarDeviceInfo`，
+QoS 为 Reliable、Transient Local、KeepLast(1)。订阅者也需请求 Transient Local 才能收到历史缓存。
+消息源码在 `common_msgs/livox_ros_driver`，升级时先编公共接口再编驱动，不能仅替换驱动库。
+
+| 字段 | 语义 |
+|---|---|
+| `header.stamp` | 最近一次接受 SDK 设备信息回调的 ROS 时间；初始未知时为零 |
+| `header.frame_id` | 驱动 `frame_id` |
+| `role`、`ip` | 安装角色、配置并经回调核对的 IP |
+| `serial_number`、`device_type` | SDK 的 SN 和设备类型代码；初始类型为零 |
+| `identity_valid` | SN 非空且为可打印非空白 ASCII；最多读取 SDK 字段的 16 字节 |
+
+配置绑定后先发布未知状态。回调到达时发布身份；重复回调刷新确认时间，仅首次发现、
+SN/有效性/类型变化写日志。无效 SN 会清空旧值，不以 IP、MAC 或历史配置替代。
+实现入口为 `LivoxLidarCallback::LidarInfoChangeCallback` 和 `identity::Publisher`。
+这是**最近确认的身份，不是在线状态**；断流后缓存仍可能存在，在线状态查 `diagnostic_state`。
+不根据 SN 停发点云、改变定位或新增 DTC。
+
+在相同 ROS_DOMAIN_ID 和可互通 DDS 网络中执行：
+
+```bash
+source install/local_setup.bash
+ros2 topic echo /sensors/livox/front/device_info --once \
+  --qos-reliability reliable --qos-durability transient_local
+ros2 run livox_ros_driver2_core collect_lidar_identity.py \
+  --timeout 5 --output /tmp/lidar_identity.json
+# 仅检查主机三路；从机可用 --roles rear：
+ros2 run livox_ros_driver2_core collect_lidar_identity.py --roles front left right
+```
+
+工具默认读取 `/opt/conf/vehicle_config.yaml` 的 VIN，也可用 `--vin` 或 `--vehicle-config` 指定。
+VIN 不可用时输出 null。缺失设备显示 `not_received`，已收无效身份显示 `unknown`，
+同角色多个发布者或消息角色不符显示 `conflict`。指定角色全部有效时退出 0，否则退出 2。
+JSON 保留采集时间、SDK 确认时间和来源，不改写车辆配置。主从 DDS 不通时可分别导出。
+
+测试覆盖空/16字节非终止 SN、错误 handle/IP、SN 更换、重复确认、晚加入 DDS 订阅者、
+清单缺项与冲突。合成测试不等于实机验收。现场升级须在允许重启驱动的窗口核对实际 SN，
+同时检查原点云、IMU、心跳与诊断正常。
+
+`identity_collector_ros_test` 使用测试依赖 `rmw_cyclonedds_cpp`，在独立 ROS 域 179 的回环网络
+验证真实子进程读取历史样本、缺项和冲突；生产 RMW 配置不受影响。2026-10-26 的 WSL 验证中，
+默认 FastDDS 跨进程连标准 `std_msgs/String` 都无法发现对端，而 CycloneDDS 通过同类验证；
+这不构成现场 FastDDS 跨机通过证据，部署后仍须实际接收核验。
+
 # 主机与设备配置
 
 `master_lidar.launch.py` → 三个 `lidar_*.launch.py` → 各自安装目录中的 `MID360s_config_*.json`。前三路 Launch 在 Python 中赋值并传入 ROS 参数；调整时修改对应文件并重编。

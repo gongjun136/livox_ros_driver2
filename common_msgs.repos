@@ -2,4 +2,4 @@ repositories:
   common_msgs:
     type: git
     url: https://github.com/gongjun136/common_msgs.git
-    version: 79c2a6843a4bae26d9bf7b2bb9f1b68fa67bb7b1
+    version: 52f65c00a5a75590eef59691e2733b28a9d00adf

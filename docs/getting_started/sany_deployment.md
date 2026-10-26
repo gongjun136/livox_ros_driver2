@@ -1,5 +1,9 @@
 @page livox_sany_deployment 主 Orin 雷达部署
 
+升级后的角色驱动自动发布 SDK 设备 SN。设备信息话题、缓存语义和一键导出见
+@ref livox_configuration "雷达 SN 与设备身份"。须配套更新 common_msgs 的接口后重编驱动；
+实机 SN 与原数据链路应在驱动重启后的维护窗口核验。
+
 @anchor livox_launch_layout_reading
 # 1. 自动入口怎样决定三台或四台，VIN 又检查什么？
 

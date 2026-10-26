@@ -1,4 +1,8 @@
 /**
+ * @example{lineno} collect_lidar_identity.py
+ * 身份语义、QoS 和导出命令见 @ref livox_configuration 。
+ */
+/**
  * @example{lineno} sany_lidar.launch.py
  * 自动角色选择见 @ref livox_launch_layout_reading 。
  */

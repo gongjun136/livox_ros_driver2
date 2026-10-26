@@ -1,5 +1,7 @@
 @page livox_source_examples Launch、配置与录包脚本源码
 
+@ref collect_lidar_identity.py "查看和导出 SDK 确认的雷达 SN"
+
 @ref sany_lidar.launch.py "车辆配置到三/四雷达的自动选择"
 
 @ref master_4lidar.launch.py "主机四雷达组合"

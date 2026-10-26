@@ -184,6 +184,20 @@ if(BUILD_TESTING)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   add_test(NAME sany_ptp_guard_test
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_sany_ptp_guard.py)
+  add_test(NAME collect_lidar_identity_test
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_collect_lidar_identity.py)
+  add_executable(lidar_identity_test test/lidar_identity_test.cpp)
+  target_include_directories(lidar_identity_test PRIVATE src ${LIVOX_LIDAR_SDK_INCLUDE_DIR})
+  ament_target_dependencies(lidar_identity_test rclcpp livox_ros_driver2)
+  add_test(NAME lidar_identity_test COMMAND lidar_identity_test)
+  add_test(NAME identity_collector_ros_test
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_identity_collector_ros.py)
+  set_tests_properties(lidar_identity_test identity_collector_ros_test PROPERTIES
+    TIMEOUT 60 RUN_SERIAL TRUE ENVIRONMENT "ROS_DOMAIN_ID=179;ROS_LOCALHOST_ONLY=1")
+  # Cross-process discovery on WSL loopback is tested with CycloneDDS; production
+  # middleware remains selected by the deployment environment.
+  set_property(TEST identity_collector_ros_test APPEND PROPERTY ENVIRONMENT
+    "RMW_IMPLEMENTATION=rmw_cyclonedds_cpp")
   add_executable(lidar_dtc_monitor_test test/lidar_dtc_monitor_test.cpp)
   target_include_directories(lidar_dtc_monitor_test PRIVATE src)
   add_test(NAME lidar_dtc_monitor_test COMMAND lidar_dtc_monitor_test)
@@ -223,6 +237,7 @@ install(PROGRAMS
 # change systemd, Chrony, RTC, or running sensors.
 install(PROGRAMS
   scripts/sany_ptp_guard.py
+  scripts/collect_lidar_identity.py
   scripts/install_sany_ptp_guard.sh
   DESTINATION lib/${PROJECT_NAME}
 )
