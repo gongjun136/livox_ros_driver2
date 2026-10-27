@@ -5,6 +5,14 @@ cmake_minimum_required(VERSION 3.14)
 include(cmake/version.cmake)
 project(livox_ros_driver2_core VERSION ${LIVOX_ROS_DRIVER2_VERSION} LANGUAGES CXX)
 message(STATUS "${PROJECT_NAME} version: ${LIVOX_ROS_DRIVER2_VERSION}")
+execute_process(COMMAND git describe --always --dirty --abbrev=40
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  OUTPUT_VARIABLE LIVOX_BUILD_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT LIVOX_BUILD_REVISION)
+  set(LIVOX_BUILD_REVISION "unknown (source archive without Git metadata)")
+endif()
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/driver_revision.txt" "${LIVOX_BUILD_REVISION}\n")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/driver_revision.txt" DESTINATION share/${PROJECT_NAME})
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -186,6 +194,8 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_sany_ptp_guard.py)
   add_test(NAME collect_lidar_identity_test
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_collect_lidar_identity.py)
+  add_test(NAME lidar_run_bundle_test
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_lidar_run_bundle.py)
   add_executable(lidar_identity_test test/lidar_identity_test.cpp)
   target_include_directories(lidar_identity_test PRIVATE src ${LIVOX_LIDAR_SDK_INCLUDE_DIR})
   ament_target_dependencies(lidar_identity_test rclcpp)
@@ -239,6 +249,8 @@ install(PROGRAMS
 install(PROGRAMS
   scripts/sany_ptp_guard.py
   scripts/collect_lidar_identity.py
+  scripts/run_lidar_bundle.py
+  scripts/lidar_bundle_check.py
   scripts/install_sany_ptp_guard.sh
   DESTINATION lib/${PROJECT_NAME}
 )

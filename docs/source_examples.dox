@@ -3,6 +3,14 @@
  * 身份参数、查询服务和导出命令见 @ref livox_configuration 。
  */
 /**
+ * @example{lineno} run_lidar_bundle.py
+ * 运行数据包入口见 @ref livox_run_bundle 。
+ */
+/**
+ * @example{lineno} lidar_bundle_check.py
+ * 有限时长检查见 @ref livox_run_bundle 。
+ */
+/**
  * @example{lineno} sany_lidar.launch.py
  * 自动角色选择见 @ref livox_launch_layout_reading 。
  */

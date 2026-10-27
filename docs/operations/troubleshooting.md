@@ -5,6 +5,7 @@
 | 证据 | 下一步 |
 |---|---|
 | 设备不能 ping，控制初始化失败 | 网卡、物理链路、主机/设备 IP、路由和重复进程 |
+| SN/控制应答成功，实际无数据，设备状态为 Error | 查询 HMS；扫描模块 `0x0210–0x0219` 异常案例见 @ref livox_incident_20261027 。不能以 SN、Normal 命令应答或 `lidar_diag_status=0` 代替实际出数验收 |
 | IMU/心跳可见，点云 Publisher 缺失 | 优先检查点云 UDP、雷达工作状态、HMS 与时间同步 |
 | 已有点云 UDP，驱动未进入点云发布 | 安装配置、实际 SDK 库、Socket、队列与 PubHandler 组帧 |
 | 驱动发布日志存在，但同环境订阅不到 | ROS_DOMAIN_ID、DDS 实现、接口白名单、QoS、跨机发现 |
