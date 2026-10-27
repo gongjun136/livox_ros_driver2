@@ -250,6 +250,7 @@ install(PROGRAMS
   scripts/sany_ptp_guard.py
   scripts/collect_lidar_identity.py
   scripts/run_lidar_bundle.py
+  scripts/run_lidar.sh
   scripts/lidar_bundle_check.py
   scripts/install_sany_ptp_guard.sh
   DESTINATION lib/${PROJECT_NAME}

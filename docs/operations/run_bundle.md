@@ -9,13 +9,22 @@ source "$HOME/.config/sany/workspace.bash"
 source /opt/ros/humble/setup.bash
 source "$LIGHTNING_LM_INSTALL_SETUP"
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
-# 主 Orin；按车辆文件选择三台/四台
-ros2 run livox_ros_driver2_core run_lidar_bundle.py --role master \
-  --output-root "${SANY_WS}/runs" --vehicle-config /opt/conf/vehicle_config.yaml
-# 从 Orin 单独执行；仅 MASTER AND SLAVE 拓扑允许后雷达入口
-ros2 run livox_ros_driver2_core run_lidar_bundle.py --role slave \
+# 主、从 Orin 使用相同命令；hostname 自动区分角色
+ros2 run livox_ros_driver2_core run_lidar_bundle.py --role auto \
   --output-root "${SANY_WS}/runs" --vehicle-config /opt/conf/vehicle_config.yaml
 ```
+
+`--role` 默认 auto：`ubuntuM` / `sany-03-master` → master，`ubuntuS` / `sany-03-slave` → slave，忽略大小写及域名后缀。未知 hostname 拒绝启动，开发环境可显式指定 master/slave。角色由主机身份确定，主机再按车辆 LIDAR 选择三/四台，从机仅允许 MASTER AND SLAVE 的后雷达。
+
+安装包附带统一根脚本；主从分别加载本机安装空间后执行（先备份已有根脚本）：
+
+```bash
+install -m 755 "$(ros2 pkg prefix livox_ros_driver2_core)/lib/livox_ros_driver2_core/run_lidar.sh" \
+  "${SANY_WS}/run_lidar.sh"
+bash "${SANY_WS}/run_lidar.sh"
+```
+
+脚本优先加载 `~/.config/sany/workspace.bash`，缺失时使用 `$HOME/Sany` 和其 `lightning_lm_ws/install/setup.bash`；不会改 hostname。两端都必须部署，不能只升级 master。
 
 两端需要配套的新驱动、公共消息及正确的本机安装环境。数据检查在接收主机上运行，后雷达不自动加入主机定位。DDS、网卡、授时环境由部署配置提供，包装器不修改。运行前停止旧驱动，避免同一设备端口冲突；同一输出根/角色有文件锁，但不能阻止其他目录或直接 launch 的旧进程。
 

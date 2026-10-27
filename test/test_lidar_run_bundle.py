@@ -17,10 +17,18 @@ import zlib
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-from run_lidar_bundle import classify, prune, write_json, OWNER  # noqa: E402
+from run_lidar_bundle import classify, prune, write_json, OWNER, role_for_hostname  # noqa: E402
 
 
 class BundleTests(unittest.TestCase):
+    def test_hostname_roles_fail_closed(self):
+        for host in ("ubuntuM", "ubuntuM.local", "sany-03-master"):
+            self.assertEqual(role_for_hostname(host), "master")
+        for host in ("ubuntuS", "ubuntuS.local", "sany-03-slave"):
+            self.assertEqual(role_for_hostname(host), "slave")
+        with self.assertRaises(ValueError):
+            role_for_hostname("unknown-orin")
+
     def test_readonly_query_validation(self):
         from lidar_bundle_check import query
 
@@ -163,6 +171,8 @@ class BundleTests(unittest.TestCase):
                             str(scripts / "run_lidar_bundle.py"),
                             "--output-root",
                             str(root / "runs"),
+                            "--role",
+                            "master",
                             "--vehicle-config",
                             str(vehicle),
                         ],

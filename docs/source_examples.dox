@@ -7,6 +7,10 @@
  * 运行数据包入口见 @ref livox_run_bundle 。
  */
 /**
+ * @example{lineno} run_lidar.sh
+ * 主从统一根入口见 @ref livox_run_bundle 。
+ */
+/**
  * @example{lineno} lidar_bundle_check.py
  * 有限时长检查见 @ref livox_run_bundle 。
  */

@@ -20,6 +20,16 @@ import time
 OWNER = "livox-run-bundle-v1"
 
 
+def role_for_hostname(hostname):
+    """Resolve deployed hostnames; never silently start master on an unknown host."""
+    name = hostname.split(".", 1)[0].lower()
+    roles = {"ubuntum": "master", "ubuntus": "slave",
+             "sany-03-master": "master", "sany-03-slave": "slave"}
+    if name not in roles:
+        raise ValueError(f"unknown hostname {hostname!r}; specify --role master or slave")
+    return roles[name]
+
+
 def now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -113,7 +123,7 @@ def prune(root, host, keep):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--role", choices=["master", "slave"], default="master")
+    parser.add_argument("--role", choices=["auto", "master", "slave"], default="auto")
     parser.add_argument(
         "--output-root",
         type=Path,
@@ -130,6 +140,11 @@ def main():
     args = parser.parse_args()
     if args.worker:
         return worker(*(Path(x) for x in args.worker))
+    if args.role == "auto":
+        try:
+            args.role = role_for_hostname(socket.gethostname())
+        except ValueError as error:
+            parser.error(str(error))
     if args.keep_normal < 1 or args.max_run_mb < 64:
         parser.error("keep-normal >= 1 and max-run-mb >= 64 required")
     from ament_index_python.packages import get_package_share_directory

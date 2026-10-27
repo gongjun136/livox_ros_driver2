@@ -58,7 +58,7 @@ ros2 launch livox_ros_driver2_core sany_lidar.launch.py vehicle_config:=/absolut
 
 主 Orin 应先按 @ref livox_time_sync 安装并验收时间启动门槛，确保 PTP 不会在系统尚未校时、PHC 尚未初始化时对外授时。运行 `run_lidar.sh` 不能替代这个系统级前置条件。
 
-# 第一步：启动雷达
+# 第一步：按车辆配置启动雷达
 
 新版入口自动创建 @ref livox_run_bundle "雷达运行数据包"，统一记录完整输出、配置、短时输入检查和各节点退出码。旧根脚本需要按下文替换；仅更新源码不会自动启用。旧 slave 使用该页的 `--role slave` 命令，数据包留在各自 Orin。
 
@@ -73,7 +73,7 @@ source /opt/ros/humble/setup.bash
 source "$LIGHTNING_LM_INSTALL_SETUP"
 set -u
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
-exec ros2 run livox_ros_driver2_core run_lidar_bundle.py --role master \
+exec ros2 run livox_ros_driver2_core run_lidar_bundle.py --role auto \
   --output-root "${SANY_WS}/runs" \
   --vehicle-config "${SANY_VEHICLE_CONFIG:-/opt/conf/vehicle_config.yaml}"
 ```
