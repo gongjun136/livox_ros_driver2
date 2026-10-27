@@ -60,7 +60,7 @@ ros2 launch livox_ros_driver2_core sany_lidar.launch.py vehicle_config:=/absolut
 
 # 第一步：按车辆配置启动雷达
 
-新版入口自动创建 @ref livox_run_bundle "雷达运行数据包"，统一记录完整输出、配置、短时输入检查和各节点退出码。旧根脚本需要按下文替换；仅更新源码不会自动启用。旧 slave 使用该页的 `--role slave` 命令，数据包留在各自 Orin。
+新版入口自动创建 @ref livox_run_bundle "雷达运行数据包"，统一记录完整输出、配置、短时输入检查和各节点退出码。旧根脚本需要按下文替换；仅更新源码不会自动启用。主从使用相同根脚本，按 hostname 自动选择角色，数据包留在各自 Orin。
 
 保存以下入口到项目总目录的 `run_lidar.sh`，文件使用 LF 换行。它与定位入口 `run_loc.sh` 分开运行。
 

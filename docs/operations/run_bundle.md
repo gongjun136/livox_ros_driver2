@@ -79,6 +79,15 @@ cat "$RUN/checks/result.json"
 
 离线集成测试使用真实 ROS LaunchService 和合成进程，覆盖正常 Ctrl-C、节点 SIGSEGV、launch 成功不能掩盖节点失败，以及保留策略。设备采样检查和状态查询应在维护窗口实测。包装器记录退出故障，不修复 @ref livox_restart_test_20261027 中的驱动析构崩溃，不自动软重启雷达。
 
-2026-10-27 独立目录只读验证：主 Orin 现有三雷达的数据、SN 参数、设备状态全部通过；从 Orin 旧驱动 `296e7f0` 的后雷达数据和设备状态通过，但身份参数缺失，工具正确记录 `identity_ok=false` 和 `invalid_response`，没有将其误判为全部通过。证据在两端 `/home/nvidia/Sany/lidar_bundle_validation_20261027/checks/`。本轮没有替换现场入口、安装新驱动或重启雷达；完整包装入口的进程管理验证来自离线 ROS 集成测试，不能写成已完成现场整套部署。
+2026-10-27 独立目录只读验证：主 Orin 现有三雷达的数据、SN 参数、设备状态全部通过；从 Orin 旧驱动 `296e7f0` 的后雷达数据和设备状态通过，但身份参数缺失，工具正确记录 `identity_ok=false` 和 `invalid_response`，没有将其误判为全部通过。证据在两端 `/home/nvidia/Sany/lidar_bundle_validation_20261027/checks/`。这是更新前的基线，后续实机部署结果如下。
 
-WSL Ubuntu 22.04 / ROS Humble 独立 build/install 验证目录为 `/tmp/livox_bundle_20261027`：4 个包构建安装成功，8 个功能 CTest（包含本功能的 4 个测试用例）通过，生成后的 25 页手册链接检查通过；定位仓库 11 项接口回归、62 页文档检查通过。新增 Python 文件单独检查 flake8。全仓库 CTest 中 copyright、cpplint、flake8、lint_cmake、pep257、uncrustify 六项 lint 未通过；旧基线 `c4d405e` 单独运行相同六项也全部失败。本次没有整库清理历史版权/格式规则，功能测试通过不等于全仓库 lint 通过。
+WSL Ubuntu 22.04 / ROS Humble 独立 build/install 验证目录为 `/tmp/livox_bundle_20261027`：4 个包构建安装成功，8 个功能 CTest（包含本功能的 5 个测试用例）通过，生成后的 25 页手册链接检查通过；定位仓库 11 项接口回归、62 页文档检查通过。新增 Python 文件单独检查 flake8。全仓库 CTest 中 copyright、cpplint、flake8、lint_cmake、pep257、uncrustify 六项 lint 未通过；旧基线 `c4d405e` 单独运行相同六项也全部失败。本次没有整库清理历史版权/格式规则，功能测试通过不等于全仓库 lint 通过。
+
+2026-10-27 后续主从部署：两端以驱动 `9a33d6b`、消息 `a6e3045`、SDK `92a02ba` 在 `/home/nvidia/Sany/deployments/lidar_bundle_hostname_20261027` 原生隔离构建，8 项功能 CTest 全部通过。Cyclone DDS 测试依赖缺失时，使用 apt 下载并解包于 `test-deps/root`，仅测试时加入 `opt/ros/humble/lib` 和 `lib/aarch64-linux-gnu` 到 LD_LIBRARY_PATH；生产仍使用原 FastDDS。旧安装和根脚本保存在 `backup/`，活动安装四个雷达包链接到该部署目录的 install，不能删除该目录。
+
+两端根脚本 SHA256 均为 `c88778afc50437219220440592e4cdc69b84ccc568cf87776f25dfadd1acce92`。ubuntuM 自动启动前/左/右，ubuntuS 自动启动后雷达。首次启动数据、SN、状态全部通过；一次 Ctrl-C 验证捕获四台原有退出码 -11，launch 返回 0，但运行包均正确标记 failed，保存全部退出事件、参数快照和 failure_state.json，没有强杀。证据目录由部署目录 first_run.txt 指向；不将此结果解释为退出故障修复或十轮重启验收通过。
+
+复启运行目录分别为主机 `runs/lidar_20261027_165113_103497_master`、从机 `runs/lidar_20261027_165110_750903_slave`，两端 tmux 会话均为 lidar_bundle。主机前雷达一次 HMS 查询超时导致 startup_check=failed；数据与身份通过。保留这一结果，独立复查两端数据/SN/设备状态均通过，分别存入当前包 recheck_20261027_165512 与 recheck_20261027_165514 子目录。单次只读 UDP 查询超时不等于扫描模块异常，但不能当作状态正常；应另存复查证据。
+
+手工复查需要与生产相同的 ROS_DOMAIN_ID=42、ROS_LOCALHOST_ONLY=0 和 FASTRTPS_DEFAULT_PROFILES_FILE=/home/nvidia/Documents/ros2/fastdds.xml；本次一次未加载 DDS 配置的手工探针没有收到数据，记录也保留，不能归因为雷达停流。不要覆盖首次检查文件或人工修改 startup_check 来抹去失败。
+定位按原 run_loc.sh 恢复到 `runs/sany_lidar_20261027_165603`，输入门槛确认三路点云和主 IMU 实际到达。25 秒接口采样收到各雷达诊断、心跳及 1254 条 Safety，但未收到位姿，Safety 为 -9；日志持续 GLOBAL_RELOCALIZATION geometric_registration_failed / too_few_robust_inliers。切换前旧运行末段也有相同重定位拒绝。故本次只能确认雷达数据包功能及雷达数据恢复，不能宣称定位或整车健康验收通过。未修改地图、定位算法、初始位姿或诊断阈值；原录包正常结束，未自动重启录包。
