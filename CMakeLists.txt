@@ -83,6 +83,7 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
   src/functional_safety_heartbeat.cpp
   src/lds.cpp
   src/lds_lidar.cpp
+  src/lidar_state_recorder.cpp
 
   src/comm/comm.cpp
   src/comm/ldq.cpp
@@ -214,6 +215,12 @@ if(BUILD_TESTING)
   add_executable(lidar_dtc_monitor_test test/lidar_dtc_monitor_test.cpp)
   target_include_directories(lidar_dtc_monitor_test PRIVATE src)
   add_test(NAME lidar_dtc_monitor_test COMMAND lidar_dtc_monitor_test)
+  find_package(Threads REQUIRED)
+  add_executable(lidar_state_recorder_test test/lidar_state_recorder_test.cpp src/lidar_state_recorder.cpp)
+  target_include_directories(lidar_state_recorder_test PRIVATE src ../Livox-SDK2/3rdparty)
+  target_link_libraries(lidar_state_recorder_test Threads::Threads)
+  add_test(NAME lidar_state_recorder_test COMMAND lidar_state_recorder_test)
+  set_tests_properties(lidar_state_recorder_test PROPERTIES TIMEOUT 20)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()

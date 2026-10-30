@@ -38,6 +38,7 @@ runs/lidar_YYYYMMDD_HHMMSS_ffffff_master/
   config/config/                 # 安装空间雷达 JSON 快照
   config/launch_ROS2/            # 安装空间 launch 快照
   config/<pid>_*                 # 节点启动时生成的参数文件
+  diagnostics/<role>_state.jsonl  # 设备原始状态观测及滚动副本 .1/.2/.3
   logs/driver.log                # SDK/stdout/stderr 与 launch 输出
   logs/driver.log.1 ... .5       # 滚动日志
   logs/ros/                     # 本次 ROS_LOG_DIR
@@ -58,6 +59,12 @@ cat "$RUN/checks/result.json"
 ```
 
 终端打印唯一运行目录，`latest_lidar_master/slave` 原子更新。配置快照便于追溯，实际 launch 仍使用本次安装空间；运行期间不要修改安装文件。元数据记录安装路径、构建时 Git revision（dirty/unknown 显式保留）、ROS 环境白名单、初始配置哈希、各节点退出码和人工停止信号。不会整份导出环境变量。安装目录不含 Git 时，revision 为 unknown，不伪造提交。
+
+# 设备状态时间线
+
+统一入口为本次驱动设置 `LIVOX_DIAGNOSTIC_LOG_DIR`，在 `diagnostics/` 保存每路设备的原始状态时间线；直接 launch 未设置该变量时不启用。记录复用现有 1 Hz 查询和 SDK 状态推送，不增加查询频率或 DDS topic。驱动进程内写线程使用 SCHED_OTHER、nice 值至少 10，并避开 isolatedcpus；其有界队列，丢失和写入错误应作为证据缺口检查。每角色文件按 8 MiB 轮转，保留当前文件及三个副本，最多约 32 MiB，仍计入运行目录总容量限制。
+
+观测包含来源、时间、序号和会话信息，以及可取得的 HMS 原始 8 字节、工作状态、PTP、版本、core_temp 原始值、SN 和上电次数。各行是独立观测，缺失或非法字段不能借用旧值；离线对比时，部分推送不会抹掉其他字段的前次有效观测；core_temp 单位未经确认，上电次数不是运行时长。此 SDK 未明确提供电压或运行时长，不能将设备时钟当作运行时长。
 
 # 短时检查与失败语义
 

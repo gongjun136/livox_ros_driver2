@@ -40,6 +40,7 @@
 #include "rapidjson/document.h"
 #include "lidar_dtc_monitor.h"
 #include "lidar_identity.h"
+#include "lidar_state_recorder.h"
 
 namespace livox_ros {
 
@@ -56,6 +57,7 @@ class LdsLidar final : public Lds {
   void SetDiagnosticMonitor(std::shared_ptr<dtc::Monitor> monitor) { diagnostic_monitor_ = std::move(monitor); }
   void ObserveDiagnosticCloud(PointFrame* frame);
   void QueryDiagnosticStatus();
+  void SetDiagnosticRecorderRole(const std::string& role) { diagnostic_role_ = role; }
   void SetIdentityParameters(std::shared_ptr<identity::Parameters> parameters) { identity_parameters_ = std::move(parameters); }
   void ObserveIdentity(uint32_t handle, const LivoxLidarInfo* info) {
     if (identity_parameters_) identity_parameters_->Observe(handle, info);
@@ -74,6 +76,7 @@ class LdsLidar final : public Lds {
   bool InitLivoxLidar();    // for new SDK
 
   bool LivoxLidarStart();
+  void StartDiagnosticRecorder(uint32_t handle);
 
   void ResetLdsLidar(void);
 
@@ -102,6 +105,8 @@ class LdsLidar final : public Lds {
   volatile bool is_initialized_;
   std::shared_ptr<dtc::Monitor> diagnostic_monitor_;
   std::shared_ptr<identity::Parameters> identity_parameters_;
+  std::string diagnostic_role_;
+  std::unique_ptr<raw_state::Recorder> diagnostic_recorder_;
   uint32_t diagnostic_handle_ = 0;
   std::atomic_bool diagnostic_query_pending_{false};
   uint16_t diagnostic_observer_id_ = 0;

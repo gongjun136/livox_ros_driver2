@@ -91,3 +91,12 @@
  * @example{lineno} install_sany_ptp_guard.sh
  * 维护窗口安装见 @ref livox_time_sync 。
  */
+
+/**
+ * @example{lineno} lidar_state_recorder.h
+ * 原始状态记录接口见 @ref livox_run_bundle 。
+ */
+/**
+ * @example{lineno} lidar_state_recorder.cpp
+ * 有界队列和轮转写入见 @ref livox_run_bundle 。
+ */

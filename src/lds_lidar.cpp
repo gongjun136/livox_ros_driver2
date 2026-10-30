@@ -29,6 +29,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <cstdlib>
 
 #ifdef WIN32
 #include <winsock2.h>
@@ -88,10 +89,13 @@ bool LdsLidar::InitLdsLidar(const std::string& path_name) {
 
   path_ = path_name;
   if (!InitLidars()) {
+    StartDiagnosticRecorder(0);
+    if (diagnostic_recorder_) diagnostic_recorder_->RecordLifecycle(raw_state::Source::Error, "lidar_initialization_failed");
     return false;
   }
   SetLidarPubHandle();
   if (!Start()) {
+    if (diagnostic_recorder_) diagnostic_recorder_->RecordLifecycle(raw_state::Source::Error, "lidar_start_failed");
     return false;
   }
   is_initialized_ = true;
@@ -126,6 +130,22 @@ bool LdsLidar::ParseSummaryConfig() {
   return ParseCfgFile(path_).ParseSummaryInfo(lidar_summary_info_);
 }
 
+void LdsLidar::StartDiagnosticRecorder(uint32_t handle) {
+  if (diagnostic_recorder_ || !diagnostic_monitor_ || diagnostic_role_.empty()) return;
+  const char* directory = std::getenv("LIVOX_DIAGNOSTIC_LOG_DIR");
+  if (!directory || !*directory) return;
+  try {
+    raw_state::Recorder::Options options;
+    options.directory = directory;
+    options.role = diagnostic_role_;
+    options.handle = handle;
+    options.ip = handle ? IpNumToString(handle) : "";
+    diagnostic_recorder_.reset(new raw_state::Recorder(std::move(options)));
+  } catch (const std::exception& error) {
+    std::cerr << "Raw state recorder unavailable; driver continues: " << error.what() << std::endl;
+  }
+}
+
 bool LdsLidar::InitLivoxLidar() {
 #ifdef BUILDING_ROS2
   DisableLivoxSdkConsoleLogger();
@@ -156,6 +176,7 @@ bool LdsLidar::InitLivoxLidar() {
   }
 
   // SDK initialization
+  StartDiagnosticRecorder(diagnostic_handle_);
   if (!LivoxLidarSdkInit(path_.c_str())) {
     std::cout << "Failed to init livox lidar sdk." << std::endl;
     return false;
@@ -230,6 +251,7 @@ int LdsLidar::DeInitLdsLidar(void) {
       SetLivoxLidarInfoCallback(nullptr, nullptr);
     }
     LivoxLidarSdkUninit();
+    if (diagnostic_recorder_) diagnostic_recorder_->Stop();
     identity_parameters_.reset();
     printf("Livox Lidar SDK Deinit completely!\n");
   }
@@ -242,6 +264,7 @@ void LdsLidar::PrepareExit(void) { DeInitLdsLidar(); }
 void LdsLidar::DiagnosticStatusCallback(uint32_t handle, uint8_t, const char* info, void* context) {
   auto* self = static_cast<LdsLidar*>(context);
   if (!self || !self->diagnostic_monitor_ || handle != self->diagnostic_handle_ || !info) return;
+  if (self->diagnostic_recorder_) self->diagnostic_recorder_->RecordJson(info);
   rapidjson::Document state;
   state.Parse(info);
   if (state.HasParseError() || !state.IsObject()) return;
@@ -287,10 +310,24 @@ void LdsLidar::ObserveDiagnosticCloud(PointFrame* frame) {
 }
 
 void LdsLidar::QueryDiagnosticStatus() {
-  if (!diagnostic_monitor_ || diagnostic_handle_ == 0 || !is_initialized_ ||
-      diagnostic_query_pending_.exchange(true)) return;
-  if (QueryLivoxLidarInternalInfo(diagnostic_handle_, DiagnosticQueryCallback, this) != kLivoxLidarStatusSuccess) {
+  if (!diagnostic_monitor_ || diagnostic_handle_ == 0 || !is_initialized_) return;
+  if (diagnostic_query_pending_.exchange(true)) {
+    if (diagnostic_recorder_) {
+      raw_state::Record record; record.fields = raw_state::Snapshot::QueryFields();
+      record.result = raw_state::QueryResult::Pending;
+      diagnostic_recorder_->RecordObservation(record);
+    }
+    return;
+  }
+  const auto status = QueryLivoxLidarInternalInfo(diagnostic_handle_, DiagnosticQueryCallback, this);
+  if (status != kLivoxLidarStatusSuccess) {
     diagnostic_query_pending_ = false;
+    if (diagnostic_recorder_) {
+      raw_state::Record record; record.fields = raw_state::Snapshot::QueryFields();
+      record.result = raw_state::QueryResult::SubmitFailed;
+      record.sdk_status = status; record.has_sdk_status = true;
+      diagnostic_recorder_->RecordObservation(record);
+    }
   }
 }
 
@@ -299,9 +336,24 @@ void LdsLidar::DiagnosticQueryCallback(livox_status status, uint32_t handle,
   auto* self = static_cast<LdsLidar*>(context);
   if (!self) return;
   self->diagnostic_query_pending_ = false;
-  if (!self->diagnostic_monitor_ || handle != self->diagnostic_handle_ ||
-      status != kLivoxLidarStatusSuccess || !response || response->ret_code != 0) return;
-  // The SDK validates the command envelope. Each requested key is still length-checked.
+  if (!self->diagnostic_monitor_ || handle != self->diagnostic_handle_) return;
+  struct EmitObservation {
+    raw_state::Recorder* recorder;
+    raw_state::Record row;
+    ~EmitObservation() { if (recorder) recorder->RecordObservation(row); }
+  } observation{self->diagnostic_recorder_.get(), {}};
+  auto& row = observation.row;
+  row.fields = raw_state::Snapshot::QueryFields();
+  row.sdk_status = status; row.has_sdk_status = true;
+  row.result = status == kLivoxLidarStatusTimeout ? raw_state::QueryResult::Timeout : raw_state::QueryResult::SdkError;
+  if (status != kLivoxLidarStatusSuccess) return;
+  row.result = raw_state::QueryResult::InvalidResponse;
+  if (!response) return;
+  row.ret_code = response->ret_code; row.has_ret_code = true;
+  if (response->ret_code != 0) { row.result = raw_state::QueryResult::SdkError; return; }
+  // This existing DTC parser has no actual response-size argument: 1400 is only
+  // an upper cap, not proof of received length. The recorder reuses only these
+  // already-decoded fields; it must not extend raw TLV reads to additional keys.
   size_t offset = 0;
   if (response->param_num > 64) return;
   std::array<uint32_t, 8> codes{};
@@ -317,6 +369,12 @@ void LdsLidar::DiagnosticQueryCallback(livox_status status, uint32_t handle,
     std::memcpy(&length, response->data + offset + 2, 2);
     offset += 4;
     if (offset + length > 1400) return;
+    if (key == kKeyHmsCode && length != 32) row.fields.status[raw_state::Hms] = raw_state::FieldStatus::Invalid;
+    if (key == kKeyCurWorkState && length != 1) row.fields.status[raw_state::WorkState] = raw_state::FieldStatus::Invalid;
+    if (key == kKeyTimeSyncType && length != 1) row.fields.status[raw_state::SyncType] = raw_state::FieldStatus::Invalid;
+    if (key == kKeyLocalTimeNow && length != 8) row.fields.status[raw_state::LocalTime] = raw_state::FieldStatus::Invalid;
+    if (key == kKeyLastSyncTime && length != 8) row.fields.status[raw_state::LastSync] = raw_state::FieldStatus::Invalid;
+    if (key == kKeyTimeOffset && length != 8) row.fields.status[raw_state::TimeOffset] = raw_state::FieldStatus::Invalid;
     if (key == kKeyHmsCode && length == 32) {
       std::memcpy(codes.data(), response->data + offset, 32);
       hms_seen = true;
@@ -336,6 +394,13 @@ void LdsLidar::DiagnosticQueryCallback(livox_status status, uint32_t handle,
   if (sync_fields == 15) self->diagnostic_monitor_->ObserveTimeSync(sync_type, local_time, last_sync, time_offset);
   if (work_seen) self->diagnostic_monitor_->ObserveWorkState(work_state);
   if (hms_seen) self->diagnostic_monitor_->ObserveHms(codes);
+  row.result = raw_state::QueryResult::Success;
+  if (hms_seen) { row.fields.hms = codes; row.fields.status[raw_state::Hms] = raw_state::FieldStatus::Valid; }
+  if (work_seen) { row.fields.work_state = work_state; row.fields.status[raw_state::WorkState] = raw_state::FieldStatus::Valid; }
+  if (sync_fields & 1) { row.fields.sync_type = sync_type; row.fields.status[raw_state::SyncType] = raw_state::FieldStatus::Valid; }
+  if (sync_fields & 2) { row.fields.local_time = local_time; row.fields.status[raw_state::LocalTime] = raw_state::FieldStatus::Valid; }
+  if (sync_fields & 4) { row.fields.last_sync = last_sync; row.fields.status[raw_state::LastSync] = raw_state::FieldStatus::Valid; }
+  if (sync_fields & 8) { row.fields.time_offset = time_offset; row.fields.status[raw_state::TimeOffset] = raw_state::FieldStatus::Valid; }
 }
 
 }  // namespace livox_ros

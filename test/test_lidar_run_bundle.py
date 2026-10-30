@@ -151,6 +151,14 @@ class BundleTests(unittest.TestCase):
                     "signal.signal(signal.SIGINT,lambda *a:sys.exit(0)); "
                     'print("READY",flush=True); time.sleep(60)'
                 )
+                # Assert the actual launched child inherits a writable run-local
+                # diagnostic directory, even if the caller exported another path.
+                child = (
+                    "import os,pathlib; "
+                    "d=pathlib.Path(os.environ['LIVOX_DIAGNOSTIC_LOG_DIR']); "
+                    "assert d.is_dir(); "
+                    "(d/'child_env.txt').write_text(str(d)); "
+                ) + child
                 (package / "launch_ROS2/sany_lidar.launch.py").write_text(
                     "from launch import LaunchDescription\n"
                     "from launch.actions import ExecuteProcess\n"
@@ -163,6 +171,7 @@ class BundleTests(unittest.TestCase):
                 env = dict(
                     os.environ,
                     PYTHONPATH=str(root) + os.pathsep + os.environ.get("PYTHONPATH", ""),
+                    LIVOX_DIAGNOSTIC_LOG_DIR=str(root / "wrong_previous_run"),
                 )
                 with (root / "console.log").open("w") as output:
                     process = subprocess.Popen(
@@ -207,6 +216,13 @@ class BundleTests(unittest.TestCase):
                 self.assertEqual(meta["node_exits"][0]["returncode"], -11 if crash else 0)
                 self.assertTrue((run / "logs/driver.log").is_file())
                 self.assertTrue((run / "config/vehicle_config.yaml").is_file())
+                self.assertEqual(
+                    (run / "diagnostics/child_env.txt").read_text(),
+                    str(run / "diagnostics"),
+                )
+                self.assertEqual(meta["device_state_history"]["directory"], "diagnostics")
+                self.assertEqual(meta["device_state_history"]["max_file_bytes"], 8 * 1024**2)
+                self.assertEqual(meta["device_state_history"]["files_per_role"], 4)
 
 
 if __name__ == "__main__":

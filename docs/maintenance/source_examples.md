@@ -37,3 +37,9 @@
 @ref sany_ptp_guard.py "PTP 启动门槛与 PHC 初始化"
 
 @ref install_sany_ptp_guard.sh "授时防护安装器"
+
+@ref lidar_state_recorder.h "原始设备状态记录接口"
+
+@ref lidar_state_recorder.cpp "原始设备状态队列和轮转写入"
+
+记录器测试位于 `test/lidar_state_recorder_test.cpp`。

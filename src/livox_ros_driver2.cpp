@@ -266,6 +266,7 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
 
     LdsLidar *read_lidar = LdsLidar::GetInstance(publish_freq);
     read_lidar->SetDiagnosticMonitor(diagnostic_monitor_);
+    if (diagnostic_monitor_) read_lidar->SetDiagnosticRecorderRole(role_names[role]);
     const auto identity_role = declare_parameter<std::string>("device_info.role",
         default_role >= 0 ? role_names[default_role] : "");
     const bool identity_enabled = declare_parameter<bool>("device_info.enabled", !identity_role.empty());

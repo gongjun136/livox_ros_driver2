@@ -177,7 +177,7 @@ def main():
     if shutil.disk_usage(root).free < 1024**3:
         parser.error("less than 1 GiB free; archive runs before starting")
     run = root / f"lidar_{datetime.now():%Y%m%d_%H%M%S_%f}_{args.role}"
-    for directory in ("config", "logs/ros", "checks"):
+    for directory in ("config", "logs/ros", "checks", "diagnostics"):
         (run / directory).mkdir(parents=True, exist_ok=True)
     for directory in ("config", "launch_ROS2"):
         shutil.copytree(package / directory, run / "config" / directory)
@@ -199,6 +199,13 @@ def main():
         package_share=str(package),
         driver_build_revision=revision.read_text().strip() if revision.exists() else "unknown",
         config_sha256=hashes,
+        device_state_history={
+            "requested": True,
+            "directory": "diagnostics",
+            "max_file_bytes": 8 * 1024**2,
+            "files_per_role": 4,
+            "source": "existing_driver_query_and_state_callbacks",
+        },
         ros_environment={
             k: os.environ.get(k)
             for k in (
@@ -221,6 +228,7 @@ def main():
         ROS_LOG_DIR=str(run / "logs/ros"),
         PYTHONUNBUFFERED="1",
         RCUTILS_COLORIZED_OUTPUT="0",
+        LIVOX_DIAGNOSTIC_LOG_DIR=str(run / "diagnostics"),
     )
     launch = (
         package

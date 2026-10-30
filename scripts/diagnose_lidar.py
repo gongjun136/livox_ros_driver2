@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read existing LiDAR evidence; live refresh uses bounded read-only device queries."""
 import argparse
+from collections import Counter
 import datetime as dt
 import json
 import os
@@ -191,6 +192,332 @@ def device_record(raw, source, live=False):
                 evidence_scope='live_query' if live else 'stored_snapshot' if raw else 'missing')
 
 
+def history_lines(run, role, budget=4 * MIB):
+    """Read the newest bounded bytes of the four recorder files, in file order."""
+    remaining, records_left, files, chunks, issues = budget, 20000, [], [], []
+    base = run / 'diagnostics' / (role + '_state.jsonl')
+    for path in [base] + [Path(str(base) + '.' + str(i)) for i in range(1, 4)]:
+        try:
+            with path.open('rb') as stream:
+                size = os.fstat(stream.fileno()).st_size
+                take = min(size, remaining)
+                start = size - take
+                stream.seek(start)
+                data = stream.read(take)
+            remaining -= len(data)
+            files.append(dict(path=str(path), size_bytes=size, read_bytes=len(data),
+                              start_byte=start, truncated=start > 0))
+            if start:
+                issues.append(dict(kind='scan_limit', path=str(path), start_byte=start,
+                                   message='容量限制：该文件更早记录未读取。'))
+                # A tail may start inside UTF-8 or JSON; never join it to another record.
+                cut = data.find(b'\n')
+                data = data[cut + 1:] if cut >= 0 else b''
+                start += cut + 1 if cut >= 0 else take
+            full_prefix = files[-1]['start_byte'] == 0
+            line_count = data.count(b'\n') + bool(data and not data.endswith(b'\n'))
+            if line_count > records_left:
+                tail = b'\n'.join(data.rsplit(b'\n', records_left)[1:]) if records_left else b''
+                start += len(data) - len(tail)
+                data, full_prefix = tail, False
+                issues.append(dict(kind='record_limit', path=str(path), start_byte=start,
+                                   message='仅分析最近最多 20000 行原始状态记录。'))
+            records_left -= data.count(b'\n') + bool(data and not data.endswith(b'\n'))
+            chunks.append((path, start, data, full_prefix))
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            issues.append(dict(kind='read_error', path=str(path), message=str(error)))
+    lines = []
+    for path, offset, data, full_prefix in reversed(chunks):
+        for index, raw in enumerate(data.splitlines(keepends=True), 1):
+            source = dict(path=str(path), line=index if full_prefix else None,
+                          line_in_slice=index, byte_offset=offset)
+            offset += len(raw)
+            if not raw.endswith(b'\n') or len(raw) > 65536:
+                issues.append(dict(kind='incomplete_line' if not raw.endswith(b'\n') else 'oversized_line',
+                                   **source, message='跳过未写完或超过 64 KiB 的原始状态行。'))
+                lines.append((None, source))  # break continuity across missing evidence
+                continue
+            try:
+                value = json.loads(raw)
+                if not isinstance(value, dict):
+                    raise ValueError('expected object')
+            except (ValueError, UnicodeError) as error:
+                issues.append(dict(kind='invalid_json', **source, message=str(error)))
+                value = None
+            lines.append((value, source))
+    return lines, files, issues
+
+
+HISTORY_FIELDS = ('hms_code', 'cur_work_state', 'time_sync_type', 'local_time_now',
+                  'last_sync_time', 'time_offset', 'core_temp', 'powerup_cnt', 'sn',
+                  'version_app', 'version_loader', 'version_hardware', 'voltage', 'uptime')
+
+
+def history_time(wall_ns):
+    try:
+        return dt.datetime.fromtimestamp(wall_ns / 1e9, dt.timezone.utc).astimezone().isoformat(timespec='milliseconds')
+    except (ValueError, OSError, OverflowError):
+        return '墙钟时间无法转换'
+
+
+def history_field_valid(key, value):
+    if key in ('voltage', 'uptime'):
+        return False  # schema 1 does not expose these measurements
+    if key == 'sn':
+        return isinstance(value, str) and 0 < len(value) <= 128
+    if key == 'hms_code' or key.startswith('version_'):
+        length, maximum = (8, 0xFFFFFFFF) if key == 'hms_code' else (4, 255)
+        return isinstance(value, list) and len(value) == length and all(type(v) is int and 0 <= v <= maximum for v in value)
+    bounds = {'cur_work_state': (0, 255), 'time_sync_type': (0, 255),
+              'time_offset': (-(2**63), 2**63 - 1), 'core_temp': (-(2**31), 2**31 - 1),
+              'powerup_cnt': (0, 2**32 - 1)}
+    lower, upper = bounds.get(key, (0, 2**64 - 1))
+    return type(value) is int and lower <= value <= upper
+
+
+def device_history(run, role, budget=4 * MIB):
+    lines, files, issues = history_lines(run, role, budget)
+    sessions, barriers, accepted = {}, 0, 0
+    missing = Counter()
+    query_results = Counter()
+    for raw, source in lines:
+        if raw is None:
+            barriers += 1
+            continue
+        if type(raw.get('schema')) is not int or raw['schema'] != 1 or raw.get('kind') != 'livox_raw_state':
+            issues.append(dict(kind='unsupported_schema', **source,
+                               message='未知原始状态 schema/kind，未解释该行。'))
+            barriers += 1
+            continue
+        integer_keys = ('pid', 'seq', 'wall_ns', 'steady_ns')
+        if (raw.get('role') != role or not isinstance(raw.get('session'), str) or not raw['session'] or
+                any(type(raw.get(k)) is not int or raw[k] < 0 for k in integer_keys) or
+                not isinstance(raw.get('fields'), dict) or not isinstance(raw.get('field_status'), dict)):
+            issues.append(dict(kind='invalid_record', **source, message='角色、会话、时间或字段结构无效，未跨该行推断转换。'))
+            barriers += 1
+            continue
+        values, statuses = {}, {}
+        for key in HISTORY_FIELDS:
+            status, value = raw['field_status'].get(key, 'missing'), raw['fields'].get(key)
+            if status == 'valid' and not history_field_valid(key, value):
+                status = 'invalid'
+            elif status not in ('valid', 'missing', 'invalid', 'not_available', 'no_response_length'):
+                status = 'unknown_status'
+            statuses[key] = status
+            values[key] = value if status == 'valid' else None
+            if status != 'valid':
+                missing[key + ':' + status] += 1
+        counters = {key: raw.get(key) if type(raw.get(key)) is int and raw[key] >= 0 else None
+                    for key in ('dropped_total', 'write_errors_total', 'suppressed_push_total')}
+        evidence = dict(source, time=history_time(raw['wall_ns']), wall_ns=raw['wall_ns'],
+                        steady_ns=raw['steady_ns'], seq=raw['seq'], session=raw['session'])
+        def scalar(key, kind):
+            return raw.get(key) if type(raw.get(key)) is kind else None
+        field_sources = raw.get('field_sources')
+        field_sources = field_sources if isinstance(field_sources, dict) else {}
+        record = dict(evidence=evidence, pid=raw['pid'], source=scalar('source', str),
+                      query_result=scalar('query_result', str), fields=values, field_status=statuses,
+                      sdk_status=scalar('sdk_status', int), ret_code=scalar('ret_code', int),
+                      handle=scalar('handle', int), ip=scalar('ip', str), detail=scalar('detail', str),
+                      writer_scheduling=scalar('writer_scheduling', str),
+                      field_sources={k: field_sources[k] if isinstance(field_sources.get(k), str)
+                                     else 'unrecorded' for k in HISTORY_FIELDS},
+                      core_temp_unit='sdk_raw_unit_unspecified', counters=counters, barrier=barriers)
+        query_results[str(raw.get('query_result', 'missing'))] += 1
+        sessions.setdefault(raw['session'], []).append(record)
+        accepted += 1
+    summaries, transitions, gaps = [], [], []
+    for session, records in sessions.items():
+        records.sort(key=lambda row: (row['evidence']['seq'], row['evidence']['steady_ns']))
+        first, previous, last_values, last_evidence = records[0], None, {}, {}
+        session_transitions, first_error, last_valid_fields, seen_fields = [], False, {}, set()
+        for row in records:
+            evidence, values = row['evidence'], row['fields']
+            for key, value in values.items():
+                if value is not None:
+                    last_valid_fields[key] = dict(value=value, evidence=evidence,
+                        source=row['field_sources'][key], unit=row['core_temp_unit'] if key == 'core_temp' else None)
+            discontinuity = previous is None
+            reasons = []
+            if previous:
+                before = previous['evidence']
+                if evidence['seq'] != before['seq'] + 1:
+                    reasons.append('sequence_gap_or_duplicate')
+                if evidence['steady_ns'] < before['steady_ns'] or row['pid'] != previous['pid']:
+                    reasons.append('session_clock_or_pid_changed')
+                if row['barrier'] != previous['barrier']:
+                    reasons.append('unreadable_record_between')
+                wall_delta = evidence['wall_ns'] - before['wall_ns']
+                steady_delta = evidence['steady_ns'] - before['steady_ns']
+                if abs(wall_delta - steady_delta) > 1_000_000_000:
+                    gaps.append(dict(kind='wall_clock_jump', session=session, before=before, after=evidence,
+                                     message='墙钟与单调时间增量相差超过 1 秒；转换排序只使用会话内 seq/steady。'))
+            for key in ('dropped_total', 'write_errors_total'):
+                current = row['counters'][key]
+                prior = previous['counters'][key] if previous else 0
+                if current is None:
+                    reasons.append(key + '_missing')
+                elif prior is None or current > prior or (previous and current < prior):
+                    reasons.append(key)
+            if reasons:
+                gaps.append(dict(kind='evidence_gap', session=session, before=previous['evidence'] if previous else None,
+                                 after=evidence, reasons=reasons, counters=row['counters']))
+                discontinuity = True
+                last_values = {}
+                last_evidence = {}
+            changed = {}
+            for key in ('cur_work_state', 'hms_code', 'time_sync_type', 'powerup_cnt'):
+                value = values[key]
+                if value is None:
+                    status = row['field_status'][key]
+                    # Push packets are partial observations. Missing keys are not
+                    # invalid measurements; retain the previous observation's own
+                    # timestamp, never fill this row with that historical value.
+                    partial = ((row['source'] in ('state_push', 'startup', 'shutdown') and status == 'missing' and
+                                row['query_result'] in ('success', 'not_applicable')) or
+                               (row['source'] == 'query' and row['query_result'] == 'success' and
+                                status in ('no_response_length', 'not_available')))
+                    if not partial:
+                        last_values.pop(key, None)
+                        last_evidence.pop(key, None)
+                    continue
+                compare = tuple(sorted(set(value) - {0})) if key == 'hms_code' else value
+                if key not in last_values:
+                    changed[key] = dict(before=None, after=list(compare) if key == 'hms_code' else compare,
+                                        kind='first_observed' if key not in seen_fields else 'observed_after_gap',
+                                        before_evidence=None, after_evidence=evidence)
+                    if key == 'cur_work_state' and compare == 4:
+                        first_error = True
+                    if key == 'hms_code' and any((code & 0xFF) in (3, 4) for code in compare):
+                        first_error = True
+                elif compare != last_values[key]:
+                    old = last_values[key]
+                    changed[key] = dict(before=list(old) if key == 'hms_code' else old,
+                                        after=list(compare) if key == 'hms_code' else compare, kind='observed_change',
+                                        before_evidence=last_evidence[key], after_evidence=evidence)
+                last_values[key] = compare
+                last_evidence[key] = evidence
+                seen_fields.add(key)
+            if changed:
+                transition = dict(session=session, evidence=evidence, changes=changed,
+                                  continuous_records=not discontinuity,
+                                  note='两次可见状态的变化；HMS 数组顺序不代表发生顺序，采样间可能有未记录变化。')
+                session_transitions.append(transition)
+                transitions.append(transition)
+            previous = row
+        latest = records[-1]
+        summaries.append(dict(session=session, pid=latest['pid'], records=len(records),
+                              first=first['evidence'], last=latest['evidence'], latest=latest,
+                              last_valid_fields=last_valid_fields,
+                              error_at_first_visible_or_after_gap=first_error,
+                              transition_count=len(session_transitions)))
+    issue_counts = Counter(item['kind'] for item in issues)
+    return dict(role=role, status='available' if accepted else 'invalid' if files else 'missing',
+                evidence_scope='stored_history', budget_bytes=budget, read_bytes=sum(f['read_bytes'] for f in files),
+                files=files, records=accepted, sessions=summaries,
+                transitions=transitions[-128:], transition_count=len(transitions),
+                transitions_truncated=len(transitions) > 128, gaps=gaps[-128:], gap_count=len(gaps),
+                issues=issues[-128:], issue_counts=dict(issue_counts),
+                missing_field_counts=dict(missing), query_results=dict(query_results),
+                latest=summaries[-1]['latest'] if summaries else None,
+                limitation='仅为已保存、已读取的原始状态历史；不证明当前状态，不确定故障的物理根因。')
+
+
+def history_findings(history):
+    """Expose concise historical evidence without replacing the current query."""
+    if history['status'] == 'missing':
+        if history.get('requested'):
+            return [dict(code='device_history_unavailable', severity='warning', role=history['role'],
+                stage='device_history', message='运行包要求采集原始状态，但该路时间线文件缺失；采集不可用/未落盘，'
+                '请核对驱动 stderr 的 writer 禁用/写入失败信息；不能据此认定雷达故障或健康',
+                evidence=[dict(path=history['expected_path'], field='device_state_history.requested', time=None)])]
+        return []
+    findings, evidence = [], []
+    sessions = history['sessions']
+    if not any(any(key in s['last_valid_fields'] for key in ('cur_work_state', 'hms_code')) for s in sessions):
+        findings.append(dict(code='device_history_unavailable', severity='warning', role=history['role'],
+            stage='device_history', message='原始状态文件未包含有效 work_state/HMS 观测（可能只有启动/采集错误记录）；'
+            '设备状态采集不可用，不能据此认定雷达故障或健康',
+            evidence=[s['last'] for s in sessions[-3:]] or history['files']))
+    message = f'原始状态历史：读取 {history["records"]} 行、{len(sessions)} 个进程会话'
+    if sessions:
+        message += f'；可见范围 {sessions[0]["first"]["time"]} 至 {sessions[-1]["last"]["time"]}（按文件和会话 seq 排序，非墙钟排序）'
+        evidence += [sessions[0]['first'], sessions[-1]['last']]
+        latest = sessions[-1]
+        observations = latest['last_valid_fields']
+        if 'cur_work_state' in observations:
+            observed = observations['cur_work_state']
+            state = observed['value']
+            message += f'；末会话最后可见 work_state={state} ({WORK_STATES.get(state, "未知")}) @ {observed["evidence"]["time"]}'
+        if history['transition_count'] > 3:
+            message += f'；可见转换共 {history["transition_count"]} 条，摘要只展示最近 3 条'
+        if history['transitions_truncated']:
+            message += '（JSON 转换明细保留最近 128 条）'
+        for transition in history['transitions'][-3:]:
+            changes = []
+            for key, change in transition['changes'].items():
+                def describe(value):
+                    if value is None:
+                        return '此前未知'
+                    if key == 'hms_code':
+                        return '[' + ','.join(f'0x{v:08x}' for v in value) + ']'
+                    if key == 'cur_work_state':
+                        return f'{value}({WORK_STATES.get(value, "未知")})'
+                    return str(value)
+                label = {'hms_code': 'HMS', 'cur_work_state': 'work_state',
+                         'time_sync_type': '原始授时类型 time_sync_type', 'powerup_cnt': '上电次数 powerup_cnt（不是 uptime）'}[key]
+                changes.append(label + ' ' +
+                               describe(change['before']) + ' → ' + describe(change['after']))
+                if change.get('before_evidence'):
+                    evidence.append(change['before_evidence'])
+            message += '；' + transition['evidence']['time'] + ' ' + ', '.join(changes)
+            evidence.append(transition['evidence'])
+        if any(s['error_at_first_visible_or_after_gap'] for s in sessions):
+            message += '；首次可见或缺口后已是 Error/错误 HMS，起点之前缺记录，不能把本行时间当故障开始'
+        if 'core_temp' in observations:
+            temperature = observations['core_temp']
+            message += f'；core_temp 原始值={temperature["value"]}，SDK 单位未声明 @ {temperature["evidence"]["time"]}（{temperature["source"]}）'
+            evidence.append(temperature['evidence'])
+        else:
+            message += '；末会话无有效 core_temp 观测'
+        ptp = [key for key in ('time_sync_type', 'local_time_now', 'last_sync_time', 'time_offset')
+               if key not in observations]
+        if ptp:
+            message += '；末会话缺有效 PTP 字段: ' + ','.join(ptp)
+        for key in ('time_sync_type', 'time_offset'):
+            if key in observations:
+                observed = observations[key]
+                message += f'；原始 {key}={observed["value"]} @ {observed["evidence"]["time"]}'
+                evidence.append(observed['evidence'])
+        if any(0x04050002 in t['changes'].get('hms_code', {}).get('after', []) for t in history['transitions']):
+            message += '；0x04050002 是历史授时警告，不能据此确定 PTP 是故障根因'
+    failed_queries = {k: v for k, v in history['query_results'].items()
+                      if k not in ('success', 'not_applicable', 'pending')}
+    if failed_queries:
+        message += '；状态查询/采集结果: ' + json.dumps(failed_queries, ensure_ascii=False)
+    if history['missing_field_counts']:
+        message += '；缺字段/不可用状态按字段计数保留在 JSON missing_field_counts'
+    message += '；电压/设备 uptime 本 schema 不提供；历史最新值不代表当前状态，温度/授时字段不直接证明物理根因'
+    findings.append(dict(code='device_history', severity='info', role=history['role'], stage='device_history',
+                         message=message, evidence=evidence))
+    if history['issues'] or history['gap_count']:
+        issue_text = ','.join(f'{k}={v}' for k, v in history['issue_counts'].items()) or '无文件格式问题'
+        gap_kinds = Counter(g['kind'] for g in history['gaps'])
+        gap_text = ','.join(f'{k}={v}' for k, v in gap_kinds.items()) or '无已知会话内缺口'
+        gaps = history['gaps'][-3:]
+        gap_evidence = [dict(g['after'], gap_kind=g['kind'], reasons=g.get('reasons'),
+                             range_start=g.get('before'), counters=g.get('counters')) for g in gaps]
+        findings.append(dict(code='device_history_incomplete', severity='warning', role=history['role'],
+            stage='device_history', message=f'原始状态历史覆盖不完整或时钟跳变：{issue_text}；'
+            f'缺口/时钟事件共 {history["gap_count"]} 条，最近最多 128 条中 {gap_text}；'
+            f'最多读取 {history["budget_bytes"]} 字节，实际 {history["read_bytes"]} 字节；缺口前后不能确定所有变化及故障起点',
+            evidence=gap_evidence + history['issues'][-3:]))
+        findings[-1]['message'] += '；丢弃/写入失败计数在写记录时取值，所列范围是计数变化可见范围，非精确丢失时刻'
+    return findings
+
+
 def lifecycle(run, meta, warnings):
     events = []
     try:
@@ -248,7 +575,7 @@ def lifecycle(run, meta, warnings):
 
 
 def analyze(run, process=None, selection='指定历史路径（离线）', refresh=False, query_fn=query):
-    warnings, findings, roles = [], [], []
+    warnings, findings, roles, histories = [], [], [], []
     meta = read_json(run / 'run_metadata.json', warnings)
     if meta.get('owner') != OWNER:
         raise ValueError('运行包缺少受支持的 owner 标记。')
@@ -319,6 +646,12 @@ def analyze(run, process=None, selection='指定历史路径（离线）', refre
                 role, 'device', f'{scope} {alarm["code"]}: {alarm["label"]}，等级={alarm.get("level_name", "Unknown")}',
                 source, 'parameters.hms', when)
         roles.append(dict(role=role, ip=IPS[role], startup=streams, device=device))
+        history = device_history(run, role)
+        history['requested'] = (isinstance(meta.get('device_state_history'), dict) and
+                                meta['device_state_history'].get('requested') is True)
+        history['expected_path'] = str(run / 'diagnostics' / (role + '_state.jsonl'))
+        histories.append(history)
+        findings += history_findings(history)
     if result.get('identity_ok') is False:
         identity_path = run / 'checks/identity.json'
         identity = read_json(identity_path, warnings)
@@ -353,9 +686,9 @@ def analyze(run, process=None, selection='指定历史路径（离线）', refre
                 active=active, process=process, metadata={k: meta.get(k) for k in (
                     'roles', 'hostname', 'role', 'started_at', 'ended_at', 'status', 'ros_environment',
                     'driver_build_revision', 'startup_check', 'stop_requested', 'forced_kill')},
-                roles=roles, findings=findings, warnings=warnings,
+                roles=roles, device_history=histories, findings=findings, warnings=warnings,
                 has_evidence=bool(startup or result or any(state for _, state in states) or lifecycle_findings or
-                                  any(r['device']['live'] for r in roles)))
+                                  any(r['device']['live'] for r in roles) or any(h['records'] for h in histories)))
 
 
 def render(report, color=False):
@@ -375,12 +708,35 @@ def render(report, color=False):
         device = role['device']
         lines.append(f'  {"本次设备查询" if device["live"] else "历史设备快照"}: SN={device["serial_number"]} work_state={device["work_state"]} ({device["work_state_name"]})')
         lines.append(f'  采集时间: {device["collected_at"]}；证据年龄: {device["age_sec"]} 秒；来源: {device["source"]}')
+    missing_history = [h['role'] for h in report.get('device_history', []) if h['status'] == 'missing']
+    if missing_history:
+        lines.append('原始状态时间线未记录（旧包兼容，不据此认定雷达故障）: ' + ','.join(missing_history))
     if not report['findings']:
         lines.append('已读取证据未列出异常；不等于当前所有雷达持续健康。')
     for finding in report['findings']:
         lines.append(paint(f'[{finding["severity"]}] {finding["role"] or "生命周期"}: {finding["message"]}',
                            '1;31' if finding['severity'] == 'error' else '33' if finding['severity'] == 'warning' else '36'))
-        lines.append('  证据: ' + json.dumps(finding['evidence'], ensure_ascii=False))
+        if finding['stage'] == 'device_history':
+            seen = set()
+            for item in finding['evidence']:
+                location = str(item.get('path', '未知文件'))
+                if item.get('line') is not None:
+                    location += ':' + str(item['line'])
+                elif item.get('byte_offset') is not None:
+                    location += ':byte=' + str(item['byte_offset']) + '（尾部读取，绝对行号未知）'
+                if item.get('time'):
+                    location += ' @ ' + item['time']
+                if item.get('reasons'):
+                    location += '；缺口=' + ','.join(item['reasons'])
+                if item.get('range_start'):
+                    location += '；前条记录=' + item['range_start']['time']
+                if item.get('kind'):
+                    location += '；' + item['kind'] + ': ' + item.get('message', '')
+                if location not in seen:
+                    lines.append('  证据: ' + location)
+                    seen.add(location)
+        else:
+            lines.append('  证据: ' + json.dumps(finding['evidence'], ensure_ascii=False))
     lines += [paint('注意: ' + warning, '33') for warning in report['warnings']]
     return '\n'.join(lines)
 

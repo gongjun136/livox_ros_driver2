@@ -113,7 +113,7 @@ def check_sources(root):
                    for path in (root / 'scripts').rglob('*')
                    if path.suffix in ('.sh', '.py')}
         candidates = {path.relative_to(root / folder).as_posix()
-                      for folder in ('scripts', 'launch_ROS2', 'config')
+                      for folder in ('src', 'scripts', 'launch_ROS2', 'config')
                       for path in (root / folder).rglob('*') if path.is_file()}
         errors.extend(f'duplicate source example: {name}'
                       for name, count in Counter(examples).items() if count > 1)
