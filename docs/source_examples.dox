@@ -7,6 +7,10 @@
  * 运行数据包入口见 @ref livox_run_bundle 。
  */
 /**
+ * @example{lineno} diagnose_lidar.py
+ * 独立雷达诊断见 @ref livox_guide_diagnostics 。
+ */
+/**
  * @example{lineno} run_lidar.sh
  * 主从统一根入口见 @ref livox_run_bundle 。
  */

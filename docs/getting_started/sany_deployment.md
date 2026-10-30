@@ -62,21 +62,7 @@ ros2 launch livox_ros_driver2_core sany_lidar.launch.py vehicle_config:=/absolut
 
 新版入口自动创建 @ref livox_run_bundle "雷达运行数据包"，统一记录完整输出、配置、短时输入检查和各节点退出码。旧根脚本需要按下文替换；仅更新源码不会自动启用。主从使用相同根脚本，按 hostname 自动选择角色，数据包留在各自 Orin。
 
-保存以下入口到项目总目录的 `run_lidar.sh`，文件使用 LF 换行。它与定位入口 `run_loc.sh` 分开运行。
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-source "$HOME/.config/sany/workspace.bash"
-set +u
-source /opt/ros/humble/setup.bash
-source "$LIGHTNING_LM_INSTALL_SETUP"
-set -u
-export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
-exec ros2 run livox_ros_driver2_core run_lidar_bundle.py --role auto \
-  --output-root "${SANY_WS}/runs" \
-  --vehicle-config "${SANY_VEHICLE_CONFIG:-/opt/conf/vehicle_config.yaml}"
-```
+将仓库维护的 `scripts/run_lidar.sh` 安装为项目总目录的 `run_lidar.sh`，文件使用 LF 换行。该入口与定位入口 `run_loc.sh` 分开运行，也支持 @ref livox_guide_diagnostics 中的 `--diagnose`。
 
 在终端一运行并保持终端打开：
 

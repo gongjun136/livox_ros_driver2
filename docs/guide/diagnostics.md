@@ -2,6 +2,11 @@
 
 先确定问题发生在雷达输出、UDP 接收、驱动组帧还是 DDS 消息传输，再决定是否需要恢复设备。涉及雷达重启时，现场必须允许中断传感器数据。
 
+现场可执行 `bash ~/Sany/run_lidar.sh --diagnose [run_path] [--root ROOT] [--json] [--color auto|always|never] [--no-refresh]`。不指定路径时优先选择 `/proc` 中活跃 worker 的运行包，否则选择搜索根目录中的最新包；显式路径只离线读取该包。活跃包默认只读查询设备序列号、工作状态和 HMS 等小量状态，不订阅大点云 DDS、不新增常驻节点，也不写设备参数或重启设备；`--no-refresh` 强制只读运行包。
+
+报告应区分启动数据检查与当前状态，并注明证据时间及缺失项；停止期间的 -11／-9 不能直接当作运行期崩溃。退出码 0 仅表示找到证据，不表示设备健康。定位自动诊断会以 `--json --no-refresh` 汇总当前上游雷达；显式检查历史定位包时不会拼入当前雷达状态。
+
+
 - @subpage livox_troubleshooting "故障定位与授时检查"
 - @subpage livox_run_bundle "雷达运行数据包与统一日志入口"
 - @subpage livox_time_sync "开机授时门槛与时钟跳变防护"

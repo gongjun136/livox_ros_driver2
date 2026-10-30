@@ -196,6 +196,8 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_collect_lidar_identity.py)
   add_test(NAME lidar_run_bundle_test
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_lidar_run_bundle.py)
+  add_test(NAME diagnose_lidar_test
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_diagnose_lidar.py)
   add_executable(lidar_identity_test test/lidar_identity_test.cpp)
   target_include_directories(lidar_identity_test PRIVATE src ${LIVOX_LIDAR_SDK_INCLUDE_DIR})
   ament_target_dependencies(lidar_identity_test rclcpp)
@@ -252,6 +254,7 @@ install(PROGRAMS
   scripts/run_lidar_bundle.py
   scripts/run_lidar.sh
   scripts/lidar_bundle_check.py
+  scripts/diagnose_lidar.py
   scripts/install_sany_ptp_guard.sh
   DESTINATION lib/${PROJECT_NAME}
 )
